@@ -514,89 +514,204 @@
             document.getElementById('detailPanel').classList.remove('open');
         }
 
-        function renderDetail(r) {
-            const statusClass = r.statut_siretisation === 'MATCHEE' ? 'highlight' : r.statut_siretisation === 'INCERTAINE' ? 'warn' : 'error';
-            document.getElementById('detailTitle').textContent = `Résultat #${r.id} — ${r.nom || 'Sans nom'}`;
-            document.getElementById('detailBody').innerHTML = `
-                <div class="detail-section">
-                    <h4>📥 Données entrantes (fiche source)</h4>
-                    <div class="detail-grid">
-                        <span class="detail-label">Réf. externe</span>
-                        <span class="detail-value mono">${esc(r.ref_externe || '-')}</span>
-                        <span class="detail-label">Nom</span>
-                        <span class="detail-value"><strong>${esc(r.nom || '-')}</strong></span>
-                        <span class="detail-label">Adresse</span>
-                        <span class="detail-value">${esc(r.adresse || '-')}</span>
-                        <span class="detail-label">Code postal</span>
-                        <span class="detail-value">${esc(r.code_postal || '-')}</span>
-                        <span class="detail-label">Ville</span>
-                        <span class="detail-value">${esc(r.ville || '-')}</span>
-                        <span class="detail-label">Téléphone</span>
-                        <span class="detail-value">${esc(r.telephone || '-')}</span>
-                        <span class="detail-label">SIRET fourni</span>
-                        <span class="detail-value mono">${esc(r.siret_fourni || '-')}</span>
-                    </div>
-                </div>
+        
+// === Algorithme de siretisation (client-side) ===
+const STOP_WORDS_SET = new Set([
+  'RESTAURANT', 'BRASSERIE', 'CAFE', 'BAR', 'HOTEL', 'BOUTIQUE', 'MAGASIN',
+  'BOULANGERIE', 'PATISSERIE', 'PHARMACIE', 'GARAGE', 'AUTO', 'COIFFURE',
+  'SALON', 'INSTITUT', 'CABINET', 'AGENCE', 'BUREAU', 'CENTRE', 'ESPACE',
+  'MAISON', 'ATELIER', 'STUDIO', 'CLUB', 'ASSOCIATION', 'SOCIETE', 'SAS',
+  'SARL', 'EURL', 'SCI', 'SNC', 'SA', 'LE', 'LA', 'LES', 'DES', 'DU',
+  'DE', 'ET', 'AU', 'AUX', 'EN', 'UN', 'UNE', 'CHEZ', 'AUX'
+]);
 
-                <div class="detail-section">
-                    <h4>🎯 Résultat de la siretisation</h4>
-                    <div class="detail-grid">
-                        <span class="detail-label">Statut</span>
-                        <span class="detail-value ${statusClass}">${esc(r.statut_siretisation || '-')}</span>
-                        <span class="detail-label">Score</span>
-                        <span class="detail-value">${scoreBar(r.score)} <strong>${r.score != null ? r.score : '-'}</strong>/100</span>
-                        <span class="detail-label">Méthode</span>
-                        <span class="detail-value">${badgeMethode(r.methode_utilisee)}</span>
-                        <span class="detail-label">Durée</span>
-                        <span class="detail-value">${r.duree_ms != null ? r.duree_ms + ' ms' : '-'}</span>
-                        <span class="detail-label">Date traitement</span>
-                        <span class="detail-value">${r.date_traitement ? new Date(r.date_traitement).toLocaleString('fr-FR') : '-'}</span>
-                    </div>
-                </div>
+const MOTS_METIER_SET = new Set([
+  'RESTAURANT', 'BRASSERIE', 'BOULANGERIE', 'PATISSERIE', 'PIZZERIA',
+  'TRAITEUR', 'SALON', 'COIFFURE', 'BEAUTE', 'INSTITUT',
+  'PHARMACIE', 'GARAGE', 'CARROSSERIE', 'HOTEL', 'AUBERGE',
+  'BAR', 'CAFE', 'TABAC', 'PRESSE', 'LIBRAIRIE',
+  'FLEURISTE', 'FROMAGERIE', 'BOUCHERIE', 'CHARCUTERIE', 'POISSONNERIE',
+  'EPICERIE', 'SUPERMARCHE', 'MAGASIN', 'BOUTIQUE', 'ATELIER',
+  'CABINET', 'BUREAU', 'AGENCE', 'STUDIO', 'CENTRE',
+  'CLINIQUE', 'LABORATOIRE', 'OPTIQUE', 'OPTICIEN',
+  'BISTROT', 'BISTRO', 'CREPERIE', 'KEBAB', 'SNACK',
+  'PRESSING', 'LAVERIE', 'QUINCAILLERIE', 'MERCERIE',
+  'MENUISERIE', 'PLOMBERIE', 'ELECTRICITE', 'SERRURERIE',
+  'AUTO', 'MOTO', 'CYCLES', 'SPORT', 'FITNESS',
+  'SPA', 'MASSAGE', 'TATOUAGE', 'PIERCING',
+  'PIZZAS', 'PIZZA', 'BURGERS', 'SUSHI', 'WOK',
+  'CAVE', 'VIGNOBLE', 'DOMAINE', 'FERME', 'MARCHE',
+  'PUB', 'TAVERNE', 'GUINGUETTE', 'RELAIS',
+  'EMPORTER', 'LIVRAISON', 'DRIVE', 'EXPRESS',
+  'SARL', 'SAS', 'EURL', 'SCI', 'SASU', 'GAEC', 'EI',
+  'SOCIETE', 'ENTREPRISE', 'COMPAGNIE', 'ETABLISSEMENT',
+  'MAISON', 'ESPACE', 'POINT', 'COIN', 'PETIT', 'GRAND'
+]);
 
-                <div class="detail-section">
-                    <h4>📤 Données SIRENE trouvées</h4>
-                    <div class="detail-grid">
-                        <span class="detail-label">SIREN</span>
-                        <span class="detail-value mono" style="font-size:.95rem;font-weight:700;">${esc(r.siren || '-')}</span>
-                        <span class="detail-label">SIRET</span>
-                        <span class="detail-value mono" style="font-size:.95rem;font-weight:700;">${esc(r.siret || '-')}</span>
-                        <span class="detail-label">Dénomination</span>
-                        <span class="detail-value">${esc(r.sir_denomination || '-')}</span>
-                        <span class="detail-label">Adresse</span>
-                        <span class="detail-value">${esc(r.sir_adresse || '-')}</span>
-                        <span class="detail-label">Code postal</span>
-                        <span class="detail-value">${esc(r.sir_code_postal || '-')}</span>
-                        <span class="detail-label">Ville</span>
-                        <span class="detail-value">${esc(r.sir_ville || '-')}</span>
-                        <span class="detail-label">Activité</span>
-                        <span class="detail-value">${esc(r.sir_activite || '-')}</span>
-                        <span class="detail-label">Cat. juridique</span>
-                        <span class="detail-value">${esc(r.sir_categorie_juridique || '-')}</span>
-                        <span class="detail-label">Tranche effectif</span>
-                        <span class="detail-value">${esc(r.sir_tranche_effectif || '-')}</span>
-                        <span class="detail-label">État admin.</span>
-                        <span class="detail-value">${esc(r.sir_etat_administratif || '-')}</span>
-                        ${r.firecrawl_source ? `<span class="detail-label">Source Firecrawl</span><span class="detail-value" style="font-size:.75rem;word-break:break-all;">${esc(r.firecrawl_source)}</span>` : ''}
-                    </div>
-                </div>
+function algoNormaliser(str) {
+  if (!str) return '';
+  return str.toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-                <div class="detail-section">
-                    <h4>🔄 Comparaison entrée / sortie</h4>
-                    <table class="comparison-table">
-                        <thead>
-                            <tr><th class="col-field">Champ</th><th class="col-input">Entrée</th><th class="col-output">SIRENE</th><th>Match</th></tr>
-                        </thead>
-                        <tbody>
-                            ${compRow('Nom / Dénomination', r.nom, r.sir_denomination)}
-                            ${compRow('Adresse', r.adresse, r.sir_adresse)}
-                            ${compRow('Code postal', r.code_postal, r.sir_code_postal)}
-                            ${compRow('Ville', r.ville, r.sir_ville)}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-        }
+function algoNettoyerNomMetier(nomNorm) {
+  const mots = nomNorm.split(' ').filter(m => m.length >= 2);
+  const nettoye = mots.filter(m => !MOTS_METIER_SET.has(m) && !STOP_WORDS_SET.has(m));
+  return nettoye.length > 0 ? nettoye.join(' ') : nomNorm;
+}
+
+function algoBigrammes(s) {
+  const bg = new Set();
+  for (let i = 0; i < s.length - 1; i++) bg.add(s.substring(i, i + 2));
+  return bg;
+}
+
+function algoDice(s1, s2) {
+  if (!s1 || !s2) return 0;
+  if (s1 === s2) return 100;
+  const bg1 = algoBigrammes(s1);
+  const bg2 = algoBigrammes(s2);
+  let inter = 0;
+  bg1.forEach(bg => { if (bg2.has(bg)) inter++; });
+  return Math.round((2 * inter) / (bg1.size + bg2.size) * 100);
+}
+
+function algoDiceDetail(s1, s2) {
+  if (!s1 || !s2) return { score: 0, bg1: new Set(), bg2: new Set(), common: new Set() };
+  if (s1 === s2) return { score: 100, bg1: algoBigrammes(s1), bg2: algoBigrammes(s2), common: algoBigrammes(s1) };
+  const bg1 = algoBigrammes(s1);
+  const bg2 = algoBigrammes(s2);
+  const common = new Set();
+  bg1.forEach(bg => { if (bg2.has(bg)) common.add(bg); });
+  const score = Math.round((2 * common.size) / (bg1.size + bg2.size) * 100);
+  return { score, bg1, bg2, common };
+}
+
+function algoContainment(a, b) {
+  if (!a || !b) return 0;
+  if (a.includes(b)) return Math.min(100, Math.round(b.length / a.length * 130));
+  if (b.includes(a)) return Math.min(100, Math.round(a.length / b.length * 130));
+  const motsA = new Set(a.split(' ').filter(m => m.length >= 3 && !STOP_WORDS_SET.has(m)));
+  const motsB = b.split(' ').filter(m => m.length >= 3 && !STOP_WORDS_SET.has(m));
+  if (motsB.length > 0) {
+    const found = motsB.filter(m => motsA.has(m)).length;
+    return Math.round(found / motsB.length * 95);
+  }
+  return 0;
+}
+
+function renderBigramBadges(bgSet, commonSet) {
+  return Array.from(bgSet).map(bg => {
+    const isCommon = commonSet.has(bg);
+    const style = isCommon
+      ? 'background:#4caf50;color:#fff;padding:2px 6px;border-radius:4px;margin:2px;display:inline-block;font-size:.8rem;font-family:monospace'
+      : 'background:#e0e0e0;color:#555;padding:2px 6px;border-radius:4px;margin:2px;display:inline-block;font-size:.8rem;font-family:monospace';
+    return '<span style="' + style + '">' + esc(bg) + '</span>';
+  }).join('');
+}
+
+function renderDetail(r) {
+  const statusClass = r.statut_siretisation === 'MATCHEE' ? 'highlight' : r.statut_siretisation === 'INCERTAINE' ? 'warn' : 'error';
+  document.getElementById('detailTitle').textContent = 'Resultat #' + r.id + ' - ' + (r.nom || 'Sans nom');
+  const nomA = r.nom || '';
+  const nomB = r.sir_denomination || '';
+  const normA = algoNormaliser(nomA);
+  const normB = algoNormaliser(nomB);
+  const cleanA = algoNettoyerNomMetier(normA);
+  const cleanB = algoNettoyerNomMetier(normB);
+  const cpMatch = (r.code_postal || '') === (r.sir_code_postal || '');
+  const diceDetail = algoDiceDetail(normA, normB);
+  const diceCleanDetail = algoDiceDetail(cleanA, cleanB);
+  const containScore = algoContainment(normA, normB);
+  const finalScore = Math.max(diceDetail.score, diceCleanDetail.score, containScore);
+  const winnerIdx = [diceDetail.score, diceCleanDetail.score, containScore].indexOf(finalScore);
+  const winnerLabels = ['Dice bigrammes', 'Dice nettoye', 'Containment'];
+  const statusColor = statusClass === 'highlight' ? '#4caf50' : statusClass === 'warn' ? '#ff9800' : '#db4437';
+  var h = '<h3 style="margin:0 0 15px;font-size:1.3rem">Detail de la siretisation</h3>';
+  h += '<div style="background:#f9f9f9;border-left:4px solid ' + statusColor + ';padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:20px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+  h += '<strong style="font-size:1.1rem">' + esc(r.methode_utilisee || 'sirene_locale').toUpperCase().replace('_',' ') + '</strong>';
+  h += '<span style="color:#888;font-size:.85rem">' + (r.duree_ms != null ? r.duree_ms + 'ms' : '-') + '</span></div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  h += '<span style="background:' + statusColor + ';color:#fff;padding:4px 12px;border-radius:20px;font-weight:700;font-size:.9rem">Score: ' + (r.score != null ? r.score : '-') + '</span>';
+  h += '<span style="border:1px solid #888;padding:4px 12px;border-radius:20px;font-size:.85rem">' + esc(r.statut_siretisation || '-') + '</span></div>';
+  if (r.siren) h += '<div style="margin-top:8px;font-size:.85rem;color:#555">SIREN: ' + esc(r.siren) + ' | SIRET: ' + esc(r.siret || '-') + ' | ' + esc(r.sir_denomination || '-') + '</div>';
+  h += '</div>';
+  h += '<h4 style="color:#333;border-bottom:2px dashed #ccc;padding-bottom:5px">1. Normalisation des noms</h4>';
+  h += '<table style="width:100%;border-collapse:collapse;margin:10px 0 20px;font-size:.88rem">';
+  h += '<tr style="border-bottom:1px dashed #ddd"><td style="padding:6px 8px;color:#888;width:140px">Nom original</td><td style="padding:6px 8px;font-weight:700">' + (esc(nomA) || '-') + '</td></tr>';
+  h += '<tr style="border-bottom:1px dashed #ddd"><td style="padding:6px 8px;color:#888">Nom normalise</td><td style="padding:6px 8px;font-family:monospace;font-size:.82rem">' + (esc(normA) || '-') + '</td></tr>';
+  h += '<tr style="border-bottom:2px solid #e0e0e0"><td style="padding:6px 8px;color:#888">Nom nettoye</td><td style="padding:6px 8px;font-family:monospace;font-size:.82rem">' + (esc(cleanA) || '-') + '</td></tr>';
+  h += '<tr style="border-bottom:1px dashed #ddd"><td style="padding:6px 8px;color:#888">Denomination</td><td style="padding:6px 8px;font-weight:700">' + (esc(nomB) || '-') + '</td></tr>';
+  h += '<tr style="border-bottom:1px dashed #ddd"><td style="padding:6px 8px;color:#888">Denom. normalisee</td><td style="padding:6px 8px;font-family:monospace;font-size:.82rem">' + (esc(normB) || '-') + '</td></tr>';
+  h += '<tr style="border-bottom:1px dashed #ddd"><td style="padding:6px 8px;color:#888">Denom. nettoyee</td><td style="padding:6px 8px;font-family:monospace;font-size:.82rem">' + (esc(cleanB) || '-') + '</td></tr>';
+  h += '</table>';
+  h += '<p style="font-size:.9rem">Code postal: <strong>' + esc(r.code_postal || '-') + '</strong> vs <strong>' + esc(r.sir_code_postal || '-') + '</strong> ' + (cpMatch ? '<span style="color:#4caf50">&#10003; Match</span>' : '<span style="color:#db4437">&#10007; Pas de match</span>') + '</p>';
+  h += '<h4 style="color:#333;border-bottom:2px dashed #ccc;padding-bottom:5px;margin-top:20px">2. Calcul des scores de similarite</h4>';
+  h += '<p style="font-size:.85rem;color:#888;margin-bottom:10px">Cliquez sur chaque methode pour voir le detail :</p>';
+  function scoreColor(s) { return s >= 80 ? '#4caf50' : s >= 50 ? '#ff9800' : '#db4437'; }
+  function diceBlock(title, icon, detail, strA, strB, isOpen) {
+    var b = '<details style="margin-bottom:10px;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden"' + (isOpen ? ' open' : '') + '>';
+    b += '<summary style="padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#fafafa">';
+    b += '<span>' + icon + ' ' + title + '</span>';
+    b += '<strong style="color:' + scoreColor(detail.score) + '">' + detail.score + '</strong></summary>';
+    b += '<div style="padding:12px 14px;font-size:.85rem">';
+    b += '<strong>Chaines comparees :</strong>';
+    b += '<pre style="background:#f5f5f5;padding:8px;border-radius:4px;font-size:.82rem;overflow-x:auto">A = "' + esc(strA) + '"\nB = "' + esc(strB) + '"</pre>';
+    b += '<p><strong>Bigrammes de A</strong> (' + detail.bg1.size + ' uniques) :</p>';
+    b += '<div style="margin-bottom:8px">' + renderBigramBadges(detail.bg1, detail.common) + '</div>';
+    b += '<p><strong>Bigrammes de B</strong> (' + detail.bg2.size + ' uniques) :</p>';
+    b += '<div style="margin-bottom:8px">' + renderBigramBadges(detail.bg2, detail.common) + '</div>';
+    b += '<p><strong>Bigrammes communs</strong> (' + detail.common.size + ') :</p>';
+    b += '<div style="margin-bottom:8px">' + renderBigramBadges(detail.common, detail.common) + '</div>';
+    b += '<div style="background:#e8f5e9;padding:8px;border-radius:4px;margin-top:8px;font-family:monospace;font-size:.82rem">';
+    b += 'Dice = 2 x ' + detail.common.size + ' / (' + detail.bg1.size + ' + ' + detail.bg2.size + ') = <strong>' + detail.score + '</strong></div>';
+    b += '</div></details>';
+    return b;
+  }
+  h += diceBlock('Dice bigrammes', '&#127922;', diceDetail, normA, normB, winnerIdx === 0);
+  h += diceBlock('Dice nettoye (sans mots metier)', '&#128221;', diceCleanDetail, cleanA, cleanB, winnerIdx === 1);
+  var ct = '<details style="margin-bottom:10px;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden"' + (winnerIdx === 2 ? ' open' : '') + '>';
+  ct += '<summary style="padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#fafafa">';
+  ct += '<span>&#128269; Containment (inclusion mots)</span>';
+  ct += '<strong style="color:' + scoreColor(containScore) + '">' + containScore + '</strong></summary>';
+  ct += '<div style="padding:12px 14px;font-size:.85rem">';
+  ct += '<p>Verifie si un nom est contenu dans l\'autre, ou si les mots significatifs se retrouvent.</p>';
+  ct += '<pre style="background:#f5f5f5;padding:8px;border-radius:4px;font-size:.82rem;overflow-x:auto">A = "' + esc(normA) + '"\nB = "' + esc(normB) + '"</pre>';
+  ct += '<div style="background:#e8f5e9;padding:8px;border-radius:4px;margin-top:8px;font-family:monospace;font-size:.82rem">';
+  ct += 'Score containment = <strong>' + containScore + '</strong></div></div></details>';
+  h += ct;
+  h += '<div style="background:#e3f2fd;padding:10px 14px;border-radius:8px;margin:15px 0;font-size:.9rem">';
+  h += '<strong>Score final :</strong> max(' + diceDetail.score + ', ' + diceCleanDetail.score + ', ' + containScore + ') = <strong style="font-size:1.1rem">' + finalScore + '</strong>';
+  h += '<span style="margin-left:10px;color:#555">(methode gagnante: ' + winnerLabels[winnerIdx] + ')</span></div>';
+  h += '<h4 style="color:#333;border-bottom:2px dashed #ccc;padding-bottom:5px;margin-top:20px">3. Donnees SIRENE trouvees</h4>';
+  h += '<div class="detail-grid">';
+  h += '<span class="detail-label">SIREN</span><span class="detail-value mono" style="font-size:.95rem;font-weight:700">' + esc(r.siren || '-') + '</span>';
+  h += '<span class="detail-label">SIRET</span><span class="detail-value mono" style="font-size:.95rem;font-weight:700">' + esc(r.siret || '-') + '</span>';
+  h += '<span class="detail-label">Denomination</span><span class="detail-value">' + esc(r.sir_denomination || '-') + '</span>';
+  h += '<span class="detail-label">Adresse</span><span class="detail-value">' + esc(r.sir_adresse || '-') + '</span>';
+  h += '<span class="detail-label">Code postal</span><span class="detail-value">' + esc(r.sir_code_postal || '-') + '</span>';
+  h += '<span class="detail-label">Ville</span><span class="detail-value">' + esc(r.sir_ville || '-') + '</span>';
+  h += '<span class="detail-label">Activite</span><span class="detail-value">' + esc(r.sir_activite || '-') + '</span>';
+  h += '<span class="detail-label">Cat. juridique</span><span class="detail-value">' + esc(r.sir_categorie_juridique || '-') + '</span>';
+  h += '<span class="detail-label">Tranche effectif</span><span class="detail-value">' + esc(r.sir_tranche_effectif || '-') + '</span>';
+  h += '<span class="detail-label">Etat admin.</span><span class="detail-value">' + esc(r.sir_etat_administratif || '-') + '</span>';
+  if (r.firecrawl_source) h += '<span class="detail-label">Source Firecrawl</span><span class="detail-value" style="font-size:.75rem;word-break:break-all">' + esc(r.firecrawl_source) + '</span>';
+  h += '</div>';
+  h += '<h4 style="color:#333;border-bottom:2px dashed #ccc;padding-bottom:5px;margin-top:20px">4. Comparaison entree / sortie</h4>';
+  h += '<table class="comparison-table"><thead><tr><th class="col-field">Champ</th><th class="col-input">Entree</th><th class="col-output">SIRENE</th><th>Match</th></tr></thead><tbody>';
+  h += compRow('Nom / Denomination', r.nom, r.sir_denomination);
+  h += compRow('Adresse', r.adresse, r.sir_adresse);
+  h += compRow('Code postal', r.code_postal, r.sir_code_postal);
+  h += compRow('Ville', r.ville, r.sir_ville);
+  h += '</tbody></table>';
+  document.getElementById('detailBody').innerHTML = h;
+}
+
+
 
         // ---- Helpers ----
         function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
