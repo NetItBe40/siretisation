@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Siretisation - Suivi des taches</title>
+<style>
+  :root { --primary: #2563eb; --success: #16a34a; --warning: #d97706; --danger: #dc2626; --gray: #64748b; --bg: #f1f5f9; --card: #fff; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: #1e293b; }
+  .header { background: linear-gradient(135deg, #1e3a5f, #2563eb); color: #fff; padding: 1.5rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 1.4rem; font-weight: 600; }
+  .header nav a { color: rgba(255,255,255,.8); text-decoration: none; margin-left: 1.5rem; font-size: .9rem; }
+  .header nav a:hover { color: #fff; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .stat-card { background: var(--card); border-radius: 10px; padding: 1.2rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .stat-card .label { font-size: .8rem; color: var(--gray); text-transform: uppercase; letter-spacing: .5px; }
+  .stat-card .value { font-size: 2rem; font-weight: 700; margin-top: .3rem; }
+  .stat-card .value.blue { color: var(--primary); }
+  .stat-card .value.green { color: var(--success); }
+  .stat-card .value.orange { color: var(--warning); }
+  .stat-card .value.red { color: var(--danger); }
+  .controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: .5rem; }
+  .controls select, .controls input { padding: .5rem .8rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: .85rem; }
+  .refresh-info { font-size: .8rem; color: var(--gray); }
+  .refresh-info span { font-weight: 600; color: var(--primary); }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  th { background: #f8fafc; text-align: left; padding: .8rem 1rem; font-size: .75rem; text-transform: uppercase; color: var(--gray); letter-spacing: .5px; border-bottom: 2px solid #e2e8f0; }
+  td { padding: .8rem 1rem; font-size: .85rem; border-bottom: 1px solid #f1f5f9; }
+  tr:hover { background: #f8fafc; }
+  .badge { display: inline-block; padding: .2rem .6rem; border-radius: 20px; font-size: .75rem; font-weight: 600; }
+  .badge-attente { background: #e0e7ff; color: #3730a3; }
+  .badge-cours { background: #fef3c7; color: #92400e; }
+  .badge-terminee { background: #d1fae5; color: #065f46; }
+  .badge-erreur { background: #fee2e2; color: #991b1b; }
+  .progress-bar { width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 4px; transition: width .3s; }
+  .progress-fill.green { background: var(--success); }
+  .progress-fill.orange { background: var(--warning); }
+  .progress-fill.blue { background: var(--primary); }
+  .progress-text { font-size: .75rem; color: var(--gray); margin-top: 2px; }
+  .detail-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: .3rem; font-size: .75rem; margin-top: 4px; }
+  .detail-row span { padding: 2px 6px; border-radius: 4px; }
+  .d-match { background: #d1fae5; color: #065f46; }
+  .d-incert { background: #fef3c7; color: #92400e; }
+  .d-echec { background: #fee2e2; color: #991b1b; }
+  .d-total { background: #e0e7ff; color: #3730a3; }
+  .error-msg { color: var(--danger); font-size: .75rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
+  .empty { text-align: center; padding: 3rem; color: var(--gray); }
+  @media (max-width: 768px) { td, th { padding: .5rem; font-size: .78rem; } .stats-row { grid-template-columns: repeat(2, 1fr); } }
+      tbody tr { cursor: pointer; transition: background .15s; }
+      tbody tr:hover { background: #f0f4ff; }
+
+      /* Login overlay */
+      #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+      #loginOverlay.hidden { display: none; }
+      .login-box { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); width: 350px; }
+      .login-box h2 { margin: 0 0 1.5rem; color: #1a73e8; text-align: center; }
+      .login-box input { width: 100%; padding: .75rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 8px; font-size: .9rem; box-sizing: border-box; }
+      .login-box button { width: 100%; padding: .75rem; background: #1a73e8; color: white; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; }
+      .login-box button:hover { background: #1557b0; }
+      .login-box .error { color: red; font-size: .85rem; margin-bottom: .5rem; display: none; }
+    </style>
+</head>
+<body>
+  <div id="loginOverlay">
+    <div class="login-box">
+      <h2>Siretisation Admin</h2>
+      <div class="error" id="loginError">Identifiants incorrects</div>
+      <input type="text" id="loginUser" placeholder="Utilisateur" value="admin">
+      <input type="password" id="loginPass" placeholder="Mot de passe" autofocus>
+      <button onclick="doLogin()">Connexion</button>
+    </div>
+  </div>
+
+
+<div class="header">
+  <h1>Siretisation - Suivi des taches</h1>
+  <nav>
+    <a href="/admin/taches">Taches</a>
+    <a href="/admin/api-keys">Cles API</a>
+          <a href="/admin/documentation">Documentation</a>
+                                <a href="/admin/qualite">Qualité</a>
+                </nav>
+</div>
+
+<div class="container">
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card"><div class="label">Total taches</div><div class="value blue" id="sTot">-</div></div>
+    <div class="stat-card"><div class="label">En cours</div><div class="value orange" id="sCours">-</div></div>
+    <div class="stat-card"><div class="label">Terminees</div><div class="value green" id="sTerm">-</div></div>
+    <div class="stat-card"><div class="label">Erreurs</div><div class="value red" id="sErr">-</div></div>
+  </div>
+
+  <div class="controls">
+    <div>
+      <select id="filterStatut">
+        <option value="">Tous les statuts</option>
+        <option value="en_attente">En attente</option>
+        <option value="en_cours">En cours</option>
+        <option value="terminee">Terminee</option>
+        <option value="erreur">Erreur</option>
+      </select>
+      <select id="filterType">
+        <option value="">Tous les types</option>
+        <option value="batch_google">Batch Google</option>
+        <option value="batch_fichier">Batch Fichier</option>
+      </select>
+    </div>
+    <div class="refresh-info">Rafraichissement auto : <span>10s</span> | Derniere MAJ : <span id="lastUpdate">-</span></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Type</th>
+        <th>Statut</th>
+        <th>Progression</th>
+        <th>Details</th>
+        <th>Debut</th>
+        <th>Duree</th>
+        <th>Erreur</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+const API_KEY = localStorage.getItem('siret_admin_key') || '';
+let refreshTimer;
+
+    async function doLogin() {
+      const user = document.getElementById('loginUser').value;
+      const password = document.getElementById('loginPass').value;
+      const errEl = document.getElementById('loginError');
+      errEl.style.display = 'none';
+      try {
+        const res = await fetch(API_BASE + '/api/v1/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ user, password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('loginOverlay').classList.add('hidden');
+          loadData();
+        } else {
+          errEl.style.display = 'block';
+        }
+      } catch(e) {
+        errEl.textContent = 'Erreur de connexion';
+        errEl.style.display = 'block';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      var passField = document.getElementById('loginPass');
+      if (passField) {
+        passField.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') doLogin();
+        });
+      }
+    });
+
+function badgeStatut(s) {
+  const m = { en_attente: 'attente', en_cours: 'cours', terminee: 'terminee', erreur: 'erreur' };
+  return `<span class="badge badge-${m[s] || 'attente'}">${s}</span>`;
+}
+
+function formatDate(d) {
+  if (!d) return '-';
+  const dt = new Date(d);
+  return dt.toLocaleDateString('fr-FR') + ' ' + dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDuree(ms) {
+  if (!ms) return '-';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'min ' + (s % 60) + 's';
+  return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'min';
+}
+
+function pctClass(pct) {
+  if (pct >= 100) return 'green';
+  if (pct >= 50) return 'blue';
+  return 'orange';
+}
+
+async function loadTaches() {
+  try {
+    const headers = {};
+    if (API_KEY) headers['x-api-key'] = API_KEY;
+    const res = await fetch(`${API_BASE}/api/v1/admin/taches`, { headers });
+    if (res.status === 401) { document.getElementById('loginOverlay').classList.remove('hidden'); return; }
+        if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+
+    // Stats
+    const taches = data.taches || data;
+    document.getElementById('sTot').textContent = taches.length;
+    document.getElementById('sCours').textContent = taches.filter(t => t.statut === 'en_cours').length;
+    document.getElementById('sTerm').textContent = taches.filter(t => t.statut === 'terminee').length;
+    document.getElementById('sErr').textContent = taches.filter(t => t.statut === 'erreur').length;
+
+    // Filters
+    const fStatut = document.getElementById('filterStatut').value;
+    const fType = document.getElementById('filterType').value;
+    let filtered = taches;
+    if (fStatut) filtered = filtered.filter(t => t.statut === fStatut);
+    if (fType) filtered = filtered.filter(t => t.type === fType);
+
+    // Sort by id desc
+    filtered.sort((a, b) => b.id - a.id);
+
+    const tbody = document.getElementById('tbody');
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty">Aucune tache trouvee</td></tr>';
+    } else {
+      tbody.innerHTML = filtered.map(t => {
+        const pct = t.total_fiches > 0 ? Math.round(t.fiches_traitees / t.total_fiches * 100) : 0;
+        const dureeMs = t.duree_totale_ms || (t.statut === 'en_cours' && t.date_debut ? Date.now() - new Date(t.date_debut).getTime() : null);
+        return `<tr onclick="window.location.href='/admin/qualite?tache_id=${t.id}'" style="cursor:pointer">
+          <td><strong>#${t.id}</strong></td>
+          <td>${t.type}</td>
+          <td>${badgeStatut(t.statut)}</td>
+          <td>
+            <div class="progress-bar"><div class="progress-fill ${pctClass(pct)}" style="width:${pct}%"></div></div>
+            <div class="progress-text">${t.fiches_traitees || 0} / ${t.total_fiches || '?'} (${pct}%)</div>
+          </td>
+          <td>
+            <div class="detail-row">
+              <span class="d-match">M: ${t.fiches_matchees || 0}</span>
+              <span class="d-incert">I: ${t.fiches_incertaines || 0}</span>
+              <span class="d-echec">E: ${t.fiches_echouees || 0}</span>
+            </div>
+          </td>
+          <td>${formatDate(t.date_debut)}</td>
+          <td>${formatDuree(dureeMs)}</td>
+          <td>${t.message_erreur ? `<span class="error-msg" title="${t.message_erreur}">${t.message_erreur}</span>` : '-'}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('fr-FR');
+  } catch (err) {
+    console.error('Erreur chargement:', err);
+    document.getElementById('tbody').innerHTML = `<tr><td colspan="8" class="empty">Erreur de chargement: ${err.message}</td></tr>`;
+  }
+}
+
+document.getElementById('filterStatut').addEventListener('change', loadTaches);
+document.getElementById('filterType').addEventListener('change', loadTaches);
+
+loadTaches();
+refreshTimer = setInterval(loadTaches, 10000);
+</script>
+</body>
+</html>

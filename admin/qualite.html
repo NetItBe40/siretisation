@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Siretisation - Contrôle Qualité</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+        /* Navbar */
+        .navbar { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: white; padding: 0 2rem; height: 48px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .navbar .brand { font-weight: 700; font-size: 1rem; }
+        .navbar nav a { color: rgba(255,255,255,0.75); text-decoration: none; margin-left: 1.5rem; font-size: .85rem; font-weight: 500; transition: color .2s; }
+        .navbar nav a:hover, .navbar nav a.active { color: #fff; }
+
+        /* Layout */
+        .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+
+        /* Task selector */
+        .task-selector { background: white; border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,.06); display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+        .task-selector label { font-weight: 600; font-size: .9rem; white-space: nowrap; }
+        .task-selector select { flex: 1; min-width: 300px; padding: .5rem .75rem; border: 1.5px solid #ddd; border-radius: 8px; font-size: .85rem; background: #fafafa; cursor: pointer; }
+        .task-selector select:focus { outline: none; border-color: #1a73e8; }
+        .task-info { font-size: .8rem; color: #666; display: flex; gap: 1rem; flex-wrap: wrap; }
+        .task-info span { background: #f0f2f5; padding: .2rem .6rem; border-radius: 6px; }
+
+        /* Stats cards */
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+        .stat-card { background: white; border-radius: 12px; padding: 1rem 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+        .stat-card .stat-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .5px; color: #888; font-weight: 600; }
+        .stat-card .stat-value { font-size: 1.6rem; font-weight: 700; margin-top: .25rem; }
+        .stat-card .stat-bar { height: 4px; border-radius: 2px; margin-top: .5rem; background: #eee; }
+        .stat-card .stat-bar-fill { height: 100%; border-radius: 2px; transition: width .5s ease; }
+        .stat-total .stat-value { color: #1a73e8; }
+        .stat-matched .stat-value { color: #0f9d58; }
+        .stat-matched .stat-bar-fill { background: #0f9d58; }
+        .stat-uncertain .stat-value { color: #f4b400; }
+        .stat-uncertain .stat-bar-fill { background: #f4b400; }
+        .stat-failed .stat-value { color: #db4437; }
+        .stat-failed .stat-bar-fill { background: #db4437; }
+        .stat-score .stat-value { color: #7c4dff; }
+        .stat-duration .stat-value { color: #00897b; font-size: 1.2rem; }
+
+        /* Filters */
+        .filters { background: white; border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,.06); display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+        .search-box { flex: 1; min-width: 250px; position: relative; }
+        .search-box input { width: 100%; padding: .5rem .75rem .5rem 2.25rem; border: 1.5px solid #ddd; border-radius: 8px; font-size: .85rem; }
+        .search-box input:focus { outline: none; border-color: #1a73e8; }
+        .search-box::before { content: '🔍'; position: absolute; left: .65rem; top: 50%; transform: translateY(-50%); font-size: .8rem; }
+        .filter-select { padding: .5rem .75rem; border: 1.5px solid #ddd; border-radius: 8px; font-size: .83rem; background: white; cursor: pointer; }
+        .filter-select:focus { outline: none; border-color: #1a73e8; }
+        .btn { padding: .5rem 1rem; border-radius: 8px; border: none; font-size: .83rem; font-weight: 600; cursor: pointer; transition: all .2s; }
+        .btn-primary { background: #1a73e8; color: white; }
+        .btn-primary:hover { background: #1557b0; }
+        .btn-outline { background: white; color: #555; border: 1.5px solid #ddd; }
+        .btn-outline:hover { border-color: #1a73e8; color: #1a73e8; }
+        .result-count { font-size: .8rem; color: #888; white-space: nowrap; }
+
+        /* Table */
+        .table-wrapper { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.06); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+        thead th { background: #f8f9fa; padding: .65rem .75rem; text-align: left; font-weight: 600; color: #555; border-bottom: 2px solid #eee; position: sticky; top: 0; white-space: nowrap; }
+        tbody td { padding: .6rem .75rem; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+        tbody tr { cursor: pointer; transition: background .15s; }
+        tbody tr:hover { background: #f0f7ff; }
+        .td-id { color: #888; font-size: .75rem; }
+        .td-nom { font-weight: 600; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .td-adresse { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; }
+        .td-siret { font-family: 'Courier New', monospace; font-size: .8rem; }
+
+        /* Status badges */
+        .badge { display: inline-block; padding: .15rem .5rem; border-radius: 10px; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
+        .badge-matchee { background: #e6f4ea; color: #0f9d58; }
+        .badge-incertaine { background: #fef7cd; color: #b8860b; }
+        .badge-echouee { background: #fce8e6; color: #db4437; }
+        .badge-method { background: #e8eaf6; color: #3949ab; font-size: .65rem; }
+
+        .score-bar { display: inline-flex; align-items: center; gap: .3rem; }
+        .score-fill { width: 40px; height: 6px; background: #eee; border-radius: 3px; overflow: hidden; }
+        .score-fill-inner { height: 100%; border-radius: 3px; }
+        .score-high { background: #0f9d58; }
+        .score-medium { background: #f4b400; }
+        .score-low { background: #db4437; }
+
+        /* Pagination */
+        .pagination { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-top: 1px solid #eee; }
+        .pagination-info { font-size: .8rem; color: #888; }
+        .pagination-buttons { display: flex; gap: .5rem; }
+        .pagination-buttons button { padding: .35rem .75rem; border: 1.5px solid #ddd; border-radius: 6px; background: white; cursor: pointer; font-size: .8rem; transition: all .2s; }
+        .pagination-buttons button:hover:not(:disabled) { border-color: #1a73e8; color: #1a73e8; }
+        .pagination-buttons button:disabled { opacity: .4; cursor: default; }
+        .pagination-buttons button.active { background: #1a73e8; color: white; border-color: #1a73e8; }
+
+        /* Detail panel */
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 2000; opacity: 0; visibility: hidden; transition: all .3s; }
+        .overlay.open { opacity: 1; visibility: visible; }
+        .detail-panel { position: fixed; top: 0; right: -600px; width: 600px; max-width: 95vw; height: 100vh; background: white; z-index: 2001; transition: right .35s ease; overflow-y: auto; box-shadow: -4px 0 20px rgba(0,0,0,.1); }
+        .detail-panel.open { right: 0; }
+        .detail-header { position: sticky; top: 0; background: white; padding: 1.25rem 1.5rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; z-index: 1; }
+        .detail-header h3 { font-size: 1rem; }
+        .detail-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #888; padding: .25rem; }
+        .detail-close:hover { color: #333; }
+        .detail-body { padding: 1.5rem; }
+
+        .detail-section { margin-bottom: 1.5rem; }
+        .detail-section h4 { font-size: .85rem; font-weight: 700; color: #1a73e8; margin-bottom: .75rem; padding-bottom: .4rem; border-bottom: 2px solid #e8eaf6; display: flex; align-items: center; gap: .5rem; }
+        .detail-grid { display: grid; grid-template-columns: 140px 1fr; gap: .4rem .75rem; font-size: .82rem; }
+        .detail-label { color: #888; font-weight: 500; }
+        .detail-value { color: #333; word-break: break-word; }
+        .detail-value.mono { font-family: 'Courier New', monospace; }
+        .detail-value.highlight { background: #e6f4ea; padding: .1rem .4rem; border-radius: 4px; font-weight: 600; }
+        .detail-value.warn { background: #fef7cd; padding: .1rem .4rem; border-radius: 4px; }
+        .detail-value.error { background: #fce8e6; padding: .1rem .4rem; border-radius: 4px; }
+
+        .comparison-table { width: 100%; border-collapse: collapse; font-size: .8rem; margin-top: .5rem; }
+        .comparison-table th { background: #f8f9fa; padding: .5rem; text-align: left; font-size: .75rem; }
+        .comparison-table td { padding: .4rem .5rem; border-bottom: 1px solid #f0f0f0; }
+        .comparison-table .col-field { width: 100px; color: #888; font-weight: 500; }
+        .comparison-table .col-input { background: #fff8f0; }
+        .comparison-table .col-output { background: #f0fff4; }
+        .match-yes { color: #0f9d58; }
+        .match-no { color: #db4437; }
+
+        /* Loading & Empty */
+        .loading { text-align: center; padding: 3rem; color: #888; }
+        .loading .spinner { display: inline-block; width: 30px; height: 30px; border: 3px solid #eee; border-top-color: #1a73e8; border-radius: 50%; animation: spin .8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-state { text-align: center; padding: 3rem; color: #aaa; }
+        .empty-state .icon { font-size: 2.5rem; margin-bottom: .75rem; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .filters { flex-direction: column; }
+            .search-box { min-width: 100%; }
+        }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <span class="brand">Siretisation - Contrôle Qualité</span>
+        <nav>
+            <a href="/admin/taches">Taches</a>
+            <a href="/admin/api-keys">Clés API</a>
+            <a href="/admin/documentation">Documentation</a>
+            <a href="/admin/qualite" class="active">Qualité</a>
+        </nav>
+    </div>
+
+    <div class="container">
+        <!-- Task selector -->
+        <div class="task-selector">
+            <label>Tâche :</label>
+            <select id="taskSelect" onchange="onTaskChange()">
+                <option value="">-- Sélectionnez une tâche --</option>
+            </select>
+            <div class="task-info" id="taskInfo"></div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-row" id="statsRow" style="display:none;">
+            <div class="stat-card stat-total">
+                <div class="stat-label">Total résultats</div>
+                <div class="stat-value" id="statTotal">0</div>
+            </div>
+            <div class="stat-card stat-matched">
+                <div class="stat-label">Matchées</div>
+                <div class="stat-value" id="statMatched">0</div>
+                <div class="stat-bar"><div class="stat-bar-fill" id="barMatched" style="width:0%"></div></div>
+            </div>
+            <div class="stat-card stat-uncertain">
+                <div class="stat-label">Incertaines</div>
+                <div class="stat-value" id="statUncertain">0</div>
+                <div class="stat-bar"><div class="stat-bar-fill" id="barUncertain" style="width:0%"></div></div>
+            </div>
+            <div class="stat-card stat-failed">
+                <div class="stat-label">Échouées</div>
+                <div class="stat-value" id="statFailed">0</div>
+                <div class="stat-bar"><div class="stat-bar-fill" id="barFailed" style="width:0%"></div></div>
+            </div>
+            <div class="stat-card stat-score">
+                <div class="stat-label">Score moyen</div>
+                <div class="stat-value" id="statScore">-</div>
+            </div>
+            <div class="stat-card stat-duration">
+                <div class="stat-label">Durée moy./fiche</div>
+                <div class="stat-value" id="statDuration">-</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters" id="filtersRow" style="display:none;">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Rechercher par nom, adresse, SIRET, réf. externe..." onkeydown="if(event.key==='Enter') loadResultats()">
+            </div>
+            <select class="filter-select" id="filterStatut" onchange="loadResultats()">
+                <option value="">Tous les statuts</option>
+                <option value="MATCHEE">Matchée</option>
+                <option value="INCERTAINE">Incertaine</option>
+                <option value="ECHOUEE">Échouée</option>
+            </select>
+            <select class="filter-select" id="filterMethode" onchange="loadResultats()">
+                <option value="">Toutes les méthodes</option>
+                <option value="sirene_locale">Sirene locale</option>
+                <option value="firecrawl">Firecrawl</option>
+                <option value="aucune">Aucune</option>
+            </select>
+            <select class="filter-select" id="filterScore" onchange="loadResultats()">
+                <option value="">Tous les scores</option>
+                <option value="high">Score élevé (≥80)</option>
+                <option value="medium">Score moyen (50-79)</option>
+                <option value="low">Score faible (&lt;50)</option>
+            </select>
+            <button class="btn btn-primary" onclick="loadResultats()">Rechercher</button>
+            <button class="btn btn-outline" onclick="resetFilters()">Réinitialiser</button>
+            <span class="result-count" id="resultCount"></span>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrapper" id="tableWrapper" style="display:none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Réf.</th>
+                        <th>Nom</th>
+                        <th>Adresse</th>
+                        <th>CP</th>
+                        <th>Statut</th>
+                        <th>Score</th>
+                        <th>Méthode</th>
+                        <th>SIREN trouvé</th>
+                        <th>SIRET trouvé</th>
+                        <th>Dénomination SIRENE</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody">
+                </tbody>
+            </table>
+            <div class="pagination">
+                <div class="pagination-info" id="paginationInfo"></div>
+                <div class="pagination-buttons" id="paginationButtons"></div>
+            </div>
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty-state" id="emptyState">
+            <div class="icon">📋</div>
+            <p>Sélectionnez une tâche pour afficher les résultats de siretisation</p>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loadingState" style="display:none;">
+            <div class="spinner"></div>
+            <p style="margin-top:.75rem;">Chargement des résultats...</p>
+        </div>
+    </div>
+
+    <!-- Detail Panel -->
+    <div class="overlay" id="overlay" onclick="closeDetail()"></div>
+    <div class="detail-panel" id="detailPanel">
+        <div class="detail-header">
+            <h3 id="detailTitle">Détail du résultat</h3>
+            <button class="detail-close" onclick="closeDetail()">&times;</button>
+        </div>
+        <div class="detail-body" id="detailBody"></div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1/admin/qualite';
+        let currentTaskId = null;
+        let currentPage = 1;
+        let resultsCache = {};
+        const PAGE_SIZE = 50;
+
+    async function doLoginQ() {
+      var user = document.getElementById('loginUser').value;
+      var password = document.getElementById('loginPass').value;
+      var errEl = document.getElementById('loginError');
+      errEl.style.display = 'none';
+      try {
+        var res = await fetch('/api/v1/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ user: user, password: password })
+        });
+        var data = await res.json();
+        if (data.success) {
+          document.getElementById('loginOverlay').classList.add('hidden');
+          loadTasks();
+        } else {
+          errEl.style.display = 'block';
+        }
+      } catch(e) {
+        errEl.textContent = 'Erreur de connexion';
+        errEl.style.display = 'block';
+      }
+    }
+    function show401() {
+      var o = document.getElementById('loginOverlay');
+      if (o) o.classList.remove('hidden');
+    }
+
+        // ---- Load tasks ----
+        async function loadTasks() {
+            try {
+                const res = await fetch('/api/v1/admin/taches', { credentials: 'include' });
+                if (res.status === 401) { show401(); return; }
+                const data = await res.json();
+                const select = document.getElementById('taskSelect');
+                data.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    const date = new Date(t.date_creation).toLocaleDateString('fr-FR');
+                    const statut = t.statut === 'terminee' ? '✅' : t.statut === 'en_cours' ? '🔄' : t.statut === 'echouee' ? '❌' : '⏳';
+                    opt.textContent = `#${t.id} - ${t.type} - ${date} ${statut} (${t.fiches_traitees || 0}/${t.total_fiches || 0} fiches)`;
+                    select.appendChild(opt);
+                });
+
+                // Auto-select from URL param
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('tache_id')) {
+                    select.value = params.get('tache_id');
+                    onTaskChange();
+                }
+            } catch (err) {
+                console.error('Erreur chargement tâches:', err);
+            }
+        }
+
+        // ---- Task change ----
+        async function onTaskChange() {
+            const select = document.getElementById('taskSelect');
+            currentTaskId = select.value;
+            currentPage = 1;
+
+            if (!currentTaskId) {
+                document.getElementById('statsRow').style.display = 'none';
+                document.getElementById('filtersRow').style.display = 'none';
+                document.getElementById('tableWrapper').style.display = 'none';
+                document.getElementById('emptyState').style.display = 'block';
+                return;
+            }
+
+            // Update URL
+            const url = new URL(window.location);
+            url.searchParams.set('tache_id', currentTaskId);
+            history.replaceState({}, '', url);
+
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('statsRow').style.display = 'grid';
+            document.getElementById('filtersRow').style.display = 'flex';
+            document.getElementById('tableWrapper').style.display = 'block';
+
+            await Promise.all([loadStats(), loadResultats()]);
+        }
+
+        // ---- Stats ----
+        async function loadStats() {
+            try {
+                const res = await fetch(`/api/v1/admin/stats?tache_id=${currentTaskId}`, { credentials: 'include' });
+                const data = await res.json();
+                const total = data.nb_resultats || 0;
+                const m = data.matched || 0;
+                const i = data.incertaines || 0;
+                const f = data.erreurs || 0;
+
+                document.getElementById('statTotal').textContent = total.toLocaleString('fr-FR');
+                document.getElementById('statMatched').textContent = m.toLocaleString('fr-FR');
+                document.getElementById('statUncertain').textContent = i.toLocaleString('fr-FR');
+                document.getElementById('statFailed').textContent = f.toLocaleString('fr-FR');
+
+                document.getElementById('barMatched').style.width = total ? (m/total*100)+'%' : '0%';
+                document.getElementById('barUncertain').style.width = total ? (i/total*100)+'%' : '0%';
+                document.getElementById('barFailed').style.width = total ? (f/total*100)+'%' : '0%';
+
+                document.getElementById('statScore').textContent = data.avg_score != null ? Math.round(data.avg_score) : '-';
+                document.getElementById('statDuration').textContent = data.avg_duree != null ? Math.round(data.avg_duree) + ' ms' : '-';
+
+                // Task info
+                const info = document.getElementById('taskInfo');
+                if (data.tache) {
+                    const t = data.tache;
+                    info.innerHTML = `
+                        <span>Type: <strong>${t.type}</strong></span>
+                        <span>Statut: <strong>${t.statut}</strong></span>
+                        ${t.date_debut ? `<span>Début: ${new Date(t.date_debut).toLocaleString('fr-FR')}</span>` : ''}
+                        ${t.duree_totale_ms ? `<span>Durée: ${formatDuration(t.duree_totale_ms)}</span>` : ''}
+                    `;
+                }
+            } catch (err) {
+                console.error('Erreur stats:', err);
+            }
+        }
+
+        // ---- Results ----
+        async function loadResultats() {
+            if (!currentTaskId) return;
+
+            const search = document.getElementById('searchInput').value.trim();
+            const statut = document.getElementById('filterStatut').value;
+            const methode = document.getElementById('filterMethode').value;
+            const score = document.getElementById('filterScore').value;
+
+            const params = new URLSearchParams({
+                page: currentPage,
+                limit: PAGE_SIZE
+            });
+            if (search) params.set('q', search);
+            if (statut) params.set('statut', statut);
+            if (methode) params.set('methode', methode);
+            if (score) params.set('score', score);
+
+            document.getElementById('loadingState').style.display = 'block';
+            document.getElementById('tableWrapper').style.display = 'none';
+
+            try {
+                const res = await fetch(`/api/v1/admin/taches/${currentTaskId}/resultats?${params}`, { credentials: 'include' });
+                const data = await res.json();
+
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('tableWrapper').style.display = 'block';
+
+                renderResults(data.rows || []);
+                renderPagination(data.total || 0, data.page || 1);
+                document.getElementById('resultCount').textContent = `${(data.total || 0).toLocaleString('fr-FR')} résultats`;
+            } catch (err) {
+                console.error('Erreur résultats:', err);
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('tableWrapper').style.display = 'block';
+            }
+        }
+
+        function renderResults(rows) {
+            resultsCache = {};
+            rows.forEach(r => { resultsCache[r.id] = r; });
+            const tbody = document.getElementById('resultsBody');
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:2rem;color:#aaa;">Aucun résultat trouvé</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rows.map(r => `
+                <tr onclick="openDetail(${r.id})">
+                    <td class="td-id">${r.id}</td>
+                    <td style="font-size:.75rem;color:#666;">${esc(r.ref_externe || '-')}</td>
+                    <td class="td-nom" title="${esc(r.nom || '')}">${esc(r.nom || '-')}</td>
+                    <td class="td-adresse" title="${esc(r.adresse || '')}">${esc(r.adresse || '-')}</td>
+                    <td>${esc(r.code_postal || '-')}</td>
+                    <td>${badgeStatut(r.statut_siretisation)}</td>
+                    <td>${scoreBar(r.score)}</td>
+                    <td>${badgeMethode(r.methode_utilisee)}</td>
+                    <td class="td-siret">${esc(r.siren || '-')}</td>
+                    <td class="td-siret">${esc(r.siret || '-')}</td>
+                    <td class="td-adresse" title="${esc(r.sir_denomination || '')}">${esc(r.sir_denomination || '-')}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderPagination(total, page) {
+            const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+            const info = document.getElementById('paginationInfo');
+            const start = (page - 1) * PAGE_SIZE + 1;
+            const end = Math.min(page * PAGE_SIZE, total);
+            info.textContent = total ? `${start}-${end} sur ${total.toLocaleString('fr-FR')}` : 'Aucun résultat';
+
+            const btns = document.getElementById('paginationButtons');
+            let html = '';
+            html += `<button onclick="goPage(1)" ${page <= 1 ? 'disabled' : ''}>&laquo;</button>`;
+            html += `<button onclick="goPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>&lsaquo;</button>`;
+
+            let startP = Math.max(1, page - 2);
+            let endP = Math.min(totalPages, page + 2);
+            for (let i = startP; i <= endP; i++) {
+                html += `<button onclick="goPage(${i})" class="${i === page ? 'active' : ''}">${i}</button>`;
+            }
+
+            html += `<button onclick="goPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>&rsaquo;</button>`;
+            html += `<button onclick="goPage(${totalPages})" ${page >= totalPages ? 'disabled' : ''}>&raquo;</button>`;
+            btns.innerHTML = html;
+        }
+
+        function goPage(p) {
+            currentPage = p;
+            loadResultats();
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterStatut').value = '';
+            document.getElementById('filterMethode').value = '';
+            document.getElementById('filterScore').value = '';
+            currentPage = 1;
+            loadResultats();
+        }
+
+        // ---- Detail panel ----
+        function openDetail(id) {
+            document.getElementById('overlay').classList.add('open');
+            document.getElementById('detailPanel').classList.add('open');
+            const r = resultsCache[id];
+            if (r) {
+                renderDetail(r);
+            } else {
+                document.getElementById('detailBody').innerHTML = '<p style="color:#db4437;">Donnee non trouvee</p>';
+            }
+        }
+
+        function closeDetail() {
+            document.getElementById('overlay').classList.remove('open');
+            document.getElementById('detailPanel').classList.remove('open');
+        }
+
+        function renderDetail(r) {
+            const statusClass = r.statut_siretisation === 'MATCHEE' ? 'highlight' : r.statut_siretisation === 'INCERTAINE' ? 'warn' : 'error';
+            document.getElementById('detailTitle').textContent = `Résultat #${r.id} — ${r.nom || 'Sans nom'}`;
+            document.getElementById('detailBody').innerHTML = `
+                <div class="detail-section">
+                    <h4>📥 Données entrantes (fiche source)</h4>
+                    <div class="detail-grid">
+                        <span class="detail-label">Réf. externe</span>
+                        <span class="detail-value mono">${esc(r.ref_externe || '-')}</span>
+                        <span class="detail-label">Nom</span>
+                        <span class="detail-value"><strong>${esc(r.nom || '-')}</strong></span>
+                        <span class="detail-label">Adresse</span>
+                        <span class="detail-value">${esc(r.adresse || '-')}</span>
+                        <span class="detail-label">Code postal</span>
+                        <span class="detail-value">${esc(r.code_postal || '-')}</span>
+                        <span class="detail-label">Ville</span>
+                        <span class="detail-value">${esc(r.ville || '-')}</span>
+                        <span class="detail-label">Téléphone</span>
+                        <span class="detail-value">${esc(r.telephone || '-')}</span>
+                        <span class="detail-label">SIRET fourni</span>
+                        <span class="detail-value mono">${esc(r.siret_fourni || '-')}</span>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h4>🎯 Résultat de la siretisation</h4>
+                    <div class="detail-grid">
+                        <span class="detail-label">Statut</span>
+                        <span class="detail-value ${statusClass}">${esc(r.statut_siretisation || '-')}</span>
+                        <span class="detail-label">Score</span>
+                        <span class="detail-value">${scoreBar(r.score)} <strong>${r.score != null ? r.score : '-'}</strong>/100</span>
+                        <span class="detail-label">Méthode</span>
+                        <span class="detail-value">${badgeMethode(r.methode_utilisee)}</span>
+                        <span class="detail-label">Durée</span>
+                        <span class="detail-value">${r.duree_ms != null ? r.duree_ms + ' ms' : '-'}</span>
+                        <span class="detail-label">Date traitement</span>
+                        <span class="detail-value">${r.date_traitement ? new Date(r.date_traitement).toLocaleString('fr-FR') : '-'}</span>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h4>📤 Données SIRENE trouvées</h4>
+                    <div class="detail-grid">
+                        <span class="detail-label">SIREN</span>
+                        <span class="detail-value mono" style="font-size:.95rem;font-weight:700;">${esc(r.siren || '-')}</span>
+                        <span class="detail-label">SIRET</span>
+                        <span class="detail-value mono" style="font-size:.95rem;font-weight:700;">${esc(r.siret || '-')}</span>
+                        <span class="detail-label">Dénomination</span>
+                        <span class="detail-value">${esc(r.sir_denomination || '-')}</span>
+                        <span class="detail-label">Adresse</span>
+                        <span class="detail-value">${esc(r.sir_adresse || '-')}</span>
+                        <span class="detail-label">Code postal</span>
+                        <span class="detail-value">${esc(r.sir_code_postal || '-')}</span>
+                        <span class="detail-label">Ville</span>
+                        <span class="detail-value">${esc(r.sir_ville || '-')}</span>
+                        <span class="detail-label">Activité</span>
+                        <span class="detail-value">${esc(r.sir_activite || '-')}</span>
+                        <span class="detail-label">Cat. juridique</span>
+                        <span class="detail-value">${esc(r.sir_categorie_juridique || '-')}</span>
+                        <span class="detail-label">Tranche effectif</span>
+                        <span class="detail-value">${esc(r.sir_tranche_effectif || '-')}</span>
+                        <span class="detail-label">État admin.</span>
+                        <span class="detail-value">${esc(r.sir_etat_administratif || '-')}</span>
+                        ${r.firecrawl_source ? `<span class="detail-label">Source Firecrawl</span><span class="detail-value" style="font-size:.75rem;word-break:break-all;">${esc(r.firecrawl_source)}</span>` : ''}
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h4>🔄 Comparaison entrée / sortie</h4>
+                    <table class="comparison-table">
+                        <thead>
+                            <tr><th class="col-field">Champ</th><th class="col-input">Entrée</th><th class="col-output">SIRENE</th><th>Match</th></tr>
+                        </thead>
+                        <tbody>
+                            ${compRow('Nom / Dénomination', r.nom, r.sir_denomination)}
+                            ${compRow('Adresse', r.adresse, r.sir_adresse)}
+                            ${compRow('Code postal', r.code_postal, r.sir_code_postal)}
+                            ${compRow('Ville', r.ville, r.sir_ville)}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // ---- Helpers ----
+        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        function badgeStatut(s) {
+            if (!s) return '-';
+            const cls = s === 'MATCHEE' ? 'badge-matchee' : s === 'INCERTAINE' ? 'badge-incertaine' : 'badge-echouee';
+            return `<span class="badge ${cls}">${s}</span>`;
+        }
+
+        function badgeMethode(m) {
+            if (!m || m === 'aucune') return '<span class="badge badge-method">aucune</span>';
+            return `<span class="badge badge-method">${m.replace('_', ' ')}</span>`;
+        }
+
+        function scoreBar(score) {
+            if (score == null) return '-';
+            const cls = score >= 80 ? 'score-high' : score >= 50 ? 'score-medium' : 'score-low';
+            return `<span class="score-bar"><span class="score-fill"><span class="score-fill-inner ${cls}" style="width:${score}%"></span></span>${score}</span>`;
+        }
+
+        function compRow(field, input, output) {
+            const match = input && output && normalize(input) === normalize(output);
+            const icon = (!input || !output) ? '' : match ? '<span class="match-yes">✓</span>' : '<span class="match-no">✗</span>';
+            return `<tr>
+                <td class="col-field">${field}</td>
+                <td class="col-input">${esc(input || '-')}</td>
+                <td class="col-output">${esc(output || '-')}</td>
+                <td>${icon}</td>
+            </tr>`;
+        }
+
+        function normalize(s) { return (s || '').toLowerCase().replace(/[\s\-,.]/g, '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+
+        function formatDuration(ms) {
+            if (ms < 1000) return ms + ' ms';
+            if (ms < 60000) return (ms / 1000).toFixed(1) + ' s';
+            if (ms < 3600000) return Math.floor(ms / 60000) + ' min ' + Math.round((ms % 60000) / 1000) + ' s';
+            return Math.floor(ms / 3600000) + 'h ' + Math.round((ms % 3600000) / 60000) + ' min';
+        }
+
+        // Keyboard shortcut
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') closeDetail();
+        });
+
+        // Init
+        loadTasks();
+    </script>
+
+    <div id="loginOverlay" class="hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;">
+      <div style="background:#fff;padding:2rem;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3);min-width:320px;text-align:center;">
+        <h2 style="color:#2563eb;margin-bottom:1rem;">Siretisation Admin</h2>
+        <input id="loginUser" type="text" placeholder="Utilisateur" value="admin" style="display:block;width:100%;padding:0.5rem;margin-bottom:0.75rem;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
+        <input id="loginPass" type="password" placeholder="Mot de passe" style="display:block;width:100%;padding:0.5rem;margin-bottom:0.75rem;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
+        <button onclick="doLoginQ()" style="width:100%;padding:0.6rem;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:1rem;">Connexion</button>
+        <p id="loginError" style="color:red;display:none;margin-top:0.5rem;">Identifiants incorrects</p>
+      </div>
+    </div>
+</body>
+</html>

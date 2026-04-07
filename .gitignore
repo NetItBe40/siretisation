@@ -1,0 +1,14 @@
+node_modules/
+logs/
+*.log
+uploads/
+.env
+*.bak
+*.bak2
+*.bak3
+*.bak4
+*.bak5
+data/
+inpi_stock/
+tmp/
+.DS_Store

@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Siretisation - Documentation API</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f4f8; color: #1a202c; }
+    .navbar { background: linear-gradient(135deg, #2b6cb0, #3182ce); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .navbar h1 { font-size: 18px; font-weight: 600; }
+    .navbar nav a { color: rgba(255,255,255,0.8); text-decoration: none; margin-left: 20px; font-size: 14px; transition: color 0.2s; }
+    .navbar nav a:hover, .navbar nav a.active { color: white; font-weight: 600; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    .hero { background: white; border-radius: 12px; padding: 32px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .hero h2 { font-size: 24px; margin-bottom: 8px; }
+    .hero p { color: #4a5568; line-height: 1.6; }
+    .hero code { background: #edf2f7; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #2d3748; }
+    .info-box { background: #ebf8ff; border-left: 4px solid #3182ce; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px; color: #2a4365; }
+    .info-box strong { color: #2b6cb0; }
+
+    /* Sidebar TOC */
+    .layout { display: flex; gap: 24px; align-items: flex-start; }
+    .toc { width: 240px; position: sticky; top: 70px; background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); flex-shrink: 0; }
+    .toc h3 { font-size: 13px; text-transform: uppercase; color: #718096; margin-bottom: 12px; letter-spacing: 0.5px; }
+    .toc a { display: block; padding: 6px 8px; color: #4a5568; text-decoration: none; font-size: 13px; border-radius: 6px; transition: all 0.2s; margin-bottom: 2px; }
+    .toc a:hover { background: #edf2f7; color: #2b6cb0; }
+    .toc .toc-section { font-weight: 600; color: #2d3748; margin-top: 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 8px; }
+    .main-content { flex: 1; min-width: 0; }
+
+    /* Endpoint cards */
+    .endpoint { background: white; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+    .endpoint-header { padding: 16px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; user-select: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+    .endpoint-header:hover { background: #fafbfc; }
+    .endpoint.open .endpoint-header { border-bottom-color: #e2e8f0; }
+    .method { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; font-family: monospace; letter-spacing: 0.5px; }
+    .method-GET { background: #c6f6d5; color: #22543d; }
+    .method-POST { background: #bee3f8; color: #2a4365; }
+    .method-PUT { background: #fefcbf; color: #744210; }
+    .method-DELETE { background: #fed7d7; color: #742a2a; }
+    .endpoint-path { font-family: 'Fira Code', 'Cascadia Code', monospace; font-size: 14px; font-weight: 500; color: #2d3748; }
+    .endpoint-desc { font-size: 13px; color: #718096; margin-left: auto; }
+    .endpoint-auth { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+    .auth-key { background: #fef3c7; color: #92400e; }
+    .auth-free { background: #d1fae5; color: #065f46; }
+    .chevron { margin-left: 8px; transition: transform 0.2s; color: #a0aec0; }
+    .endpoint.open .chevron { transform: rotate(90deg); }
+    .endpoint-body { display: none; padding: 20px; border-top: 1px solid #e2e8f0; }
+    .endpoint.open .endpoint-body { display: block; }
+
+    /* Params table */
+    .params-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+    .params-table th { text-align: left; padding: 8px 12px; background: #f7fafc; color: #4a5568; font-weight: 600; border-bottom: 2px solid #e2e8f0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .params-table td { padding: 8px 12px; border-bottom: 1px solid #edf2f7; vertical-align: top; }
+    .params-table tr:last-child td { border-bottom: none; }
+    .param-name { font-family: monospace; font-weight: 600; color: #2b6cb0; }
+    .param-type { font-size: 11px; background: #edf2f7; padding: 2px 6px; border-radius: 4px; color: #4a5568; }
+    .param-required { color: #e53e3e; font-size: 11px; font-weight: 600; }
+    .param-optional { color: #a0aec0; font-size: 11px; }
+    .sub-label { font-size: 12px; font-weight: 600; color: #4a5568; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.3px; }
+
+    /* Code blocks */
+    .code-block { background: #1a202c; color: #e2e8f0; border-radius: 8px; padding: 16px; font-family: 'Fira Code', monospace; font-size: 12.5px; line-height: 1.6; overflow-x: auto; position: relative; margin: 8px 0; white-space: pre; }
+    .code-block .comment { color: #718096; }
+    .code-block .string { color: #68d391; }
+    .code-block .number { color: #f6ad55; }
+    .code-block .key { color: #90cdf4; }
+    .code-block .method-label { color: #fc8181; }
+    .copy-btn { position: absolute; top: 8px; right: 8px; background: #2d3748; border: 1px solid #4a5568; color: #a0aec0; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; transition: all 0.2s; }
+    .copy-btn:hover { background: #4a5568; color: white; }
+
+    /* Try it section */
+    .try-it { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-top: 16px; }
+    .try-it h4 { font-size: 13px; color: #2d3748; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .try-it h4::before { content: '▶'; color: #38a169; font-size: 10px; }
+    .try-input { width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-family: monospace; font-size: 12px; margin-bottom: 8px; background: white; }
+    .try-input:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 3px rgba(49,130,206,0.1); }
+    .try-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .try-row label { font-size: 12px; color: #4a5568; min-width: 90px; padding-top: 8px; font-weight: 500; }
+    .try-row input, .try-row textarea { flex: 1; }
+    .try-btn { background: #3182ce; color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: background 0.2s; }
+    .try-btn:hover { background: #2b6cb0; }
+    .try-btn:disabled { background: #a0aec0; cursor: not-allowed; }
+    .try-response { margin-top: 12px; }
+    .try-status { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+    .try-status.s2xx { color: #38a169; }
+    .try-status.s4xx { color: #dd6b20; }
+    .try-status.s5xx { color: #e53e3e; }
+
+    /* Response codes */
+    .response-codes { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+    .resp-code { font-size: 12px; padding: 3px 10px; border-radius: 12px; font-weight: 600; font-family: monospace; }
+    .resp-200 { background: #c6f6d5; color: #22543d; }
+    .resp-201 { background: #c6f6d5; color: #22543d; }
+    .resp-400 { background: #fefcbf; color: #744210; }
+    .resp-401 { background: #fed7d7; color: #742a2a; }
+    .resp-403 { background: #fed7d7; color: #742a2a; }
+    .resp-429 { background: #feebc8; color: #7b341e; }
+    .resp-500 { background: #e2e8f0; color: #4a5568; }
+
+    .section-title { font-size: 18px; font-weight: 700; color: #2d3748; margin: 28px 0 12px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; display: flex; align-items: center; gap: 8px; }
+    .section-title .icon { font-size: 20px; }
+
+    @media (max-width: 900px) {
+      .layout { flex-direction: column; }
+      .toc { width: 100%; position: static; }
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <h1>Siretisation - Documentation API</h1>
+    <nav>
+      <a href="/admin/taches">Taches</a>
+      <a href="/admin/api-keys">Cles API</a>
+      <a href="/admin/documentation" class="active">Documentation</a>
+                        <a href="/admin/qualite">Qualité</a>
+                </nav>
+  </div>
+
+  <div class="container">
+    <div class="hero">
+      <h2>API de Siretisation</h2>
+      <p>API REST pour le matching d'etablissements avec le registre SIRENE (INSEE). Retrouvez automatiquement le SIREN/SIRET d'entreprises a partir de leur nom, adresse et autres informations.</p>
+      <div class="info-box">
+        <strong>URL de base :</strong> <code>https://srv1.net-it-be.com:3001/api/v1</code><br>
+        <strong>Authentification :</strong> Header <code>X-API-Key: votre_cle</code> ou parametre <code>?api_key=votre_cle</code><br>
+        <strong>Format :</strong> JSON (Content-Type: application/json)
+      </div>
+    </div>
+
+    <div class="layout">
+      <aside class="toc">
+        <h3>Sommaire</h3>
+        <div class="toc-section">Authentification</div>
+        <a href="#auth">Cle API &amp; Erreurs</a>
+        <div class="toc-section">Siretisation</div>
+        <a href="#post-unitaire">POST /unitaire</a>
+        <a href="#post-batch-google">POST /batch/google-business</a>
+        <a href="#post-batch-fichier">POST /batch/fichier</a>
+        <div class="toc-section">Taches</div>
+        <a href="#get-tache-statut">GET /:id (statut)</a>
+        <a href="#get-tache-resultats">GET /:id/resultats</a>
+        <a href="#get-tache-export">GET /:id/resultats/export</a>
+        <a href="#get-tache-logs">GET /:id/logs</a>
+        <div class="toc-section">Administration</div>
+        <a href="#admin-taches">GET /admin/taches</a>
+        <a href="#admin-keys-list">GET /admin/api-keys</a>
+        <a href="#admin-keys-create">POST /admin/api-keys</a>
+        <a href="#admin-keys-update">PUT /admin/api-keys/:id</a>
+        <a href="#admin-keys-delete">DELETE /admin/api-keys/:id</a>
+        <div class="toc-section">Systeme</div>
+        <a href="#health">GET /health</a>
+      </aside>
+
+      <div class="main-content">
+
+        <!-- ===== AUTHENTIFICATION ===== -->
+        <div class="section-title" id="auth"><span class="icon">🔑</span> Authentification</div>
+        <div class="endpoint open">
+          <div class="endpoint-body" style="display:block; border-top:none;">
+            <p style="margin-bottom:12px; font-size:14px; color:#4a5568;">Toutes les routes <code>/api/v1/siretisation/*</code> et <code>/api/v1/taches/*</code> requierent une cle API. Les routes <code>/admin/*</code> et <code>/api/v1/admin/*</code> sont en acces libre.</p>
+            <div class="sub-label">Methodes d'authentification</div>
+            <table class="params-table">
+              <tr><th>Methode</th><th>Exemple</th></tr>
+              <tr><td>Header HTTP</td><td><code>X-API-Key: sk_siret_abc123...</code></td></tr>
+              <tr><td>Query parameter</td><td><code>?api_key=sk_siret_abc123...</code></td></tr>
+            </table>
+            <div class="sub-label">Codes d'erreur d'authentification</div>
+            <table class="params-table">
+              <tr><th>Code</th><th>Erreur</th><th>Description</th></tr>
+              <tr><td><span class="resp-code resp-401">401</span></td><td>Cle API manquante</td><td>Aucune cle fournie dans la requete</td></tr>
+              <tr><td><span class="resp-code resp-403">403</span></td><td>Cle API invalide</td><td>La cle n'existe pas en base</td></tr>
+              <tr><td><span class="resp-code resp-403">403</span></td><td>Cle API desactivee</td><td>La cle a ete desactivee par un administrateur</td></tr>
+              <tr><td><span class="resp-code resp-403">403</span></td><td>Cle API expiree</td><td>La date d'expiration est depassee</td></tr>
+              <tr><td><span class="resp-code resp-429">429</span></td><td>Limite atteinte</td><td>Nombre maximum de requetes depasse</td></tr>
+            </table>
+            <div class="code-block"><span class="comment">// Exemple de reponse 401</span>
+{
+  <span class="key">"error"</span>: <span class="string">"Cle API manquante"</span>,
+  <span class="key">"message"</span>: <span class="string">"Fournissez votre cle API via le header X-API-Key ou le parametre api_key"</span>
+}</div>
+          </div>
+        </div>
+
+        <!-- ===== SIRETISATION ===== -->
+        <div class="section-title"><span class="icon">🔍</span> Siretisation</div>
+
+        <!-- POST /unitaire -->
+        <div class="endpoint" id="post-unitaire">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-POST">POST</span>
+            <span class="endpoint-path">/api/v1/siretisation/unitaire</span>
+            <span class="endpoint-desc">Recherche synchrone (1 etablissement)</span>
+            <span class="endpoint-auth auth-key">Cle API</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Recherche un seul etablissement dans le registre SIRENE. La reponse est synchrone et contient directement le resultat du matching.</p>
+            <div class="sub-label">Parametres (body JSON)</div>
+            <table class="params-table">
+              <tr><th>Parametre</th><th>Type</th><th>Requis</th><th>Description</th></tr>
+              <tr><td><span class="param-name">nom</span></td><td><span class="param-type">string</span></td><td><span class="param-required">oui</span></td><td>Nom / raison sociale de l'etablissement</td></tr>
+              <tr><td><span class="param-name">adresse</span></td><td><span class="param-type">string</span></td><td><span class="param-optional">non</span></td><td>Adresse complete</td></tr>
+              <tr><td><span class="param-name">code_postal</span></td><td><span class="param-type">string</span></td><td><span class="param-optional">non</span></td><td>Code postal (5 chiffres)</td></tr>
+              <tr><td><span class="param-name">ville</span></td><td><span class="param-type">string</span></td><td><span class="param-optional">non</span></td><td>Nom de la ville</td></tr>
+              <tr><td><span class="param-name">telephone</span></td><td><span class="param-type">string</span></td><td><span class="param-optional">non</span></td><td>Numero de telephone</td></tr>
+              <tr><td><span class="param-name">siret</span></td><td><span class="param-type">string</span></td><td><span class="param-optional">non</span></td><td>SIRET connu (verification)</td></tr>
+            </table>
+            <div class="sub-label">Codes de reponse</div>
+            <div class="response-codes">
+              <span class="resp-code resp-200">200 OK</span>
+              <span class="resp-code resp-400">400 Bad Request</span>
+              <span class="resp-code resp-401">401 Unauthorized</span>
+              <span class="resp-code resp-500">500 Server Error</span>
+            </div>
+            <div class="sub-label">Exemple de requete</div>
+            <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button><span class="method-label">POST</span> /api/v1/siretisation/unitaire
+<span class="key">Content-Type</span>: application/json
+<span class="key">X-API-Key</span>: sk_siret_votre_cle
+
+{
+  <span class="key">"nom"</span>: <span class="string">"Boulangerie Martin"</span>,
+  <span class="key">"adresse"</span>: <span class="string">"12 rue de la Paix"</span>,
+  <span class="key">"code_postal"</span>: <span class="string">"75002"</span>,
+  <span class="key">"ville"</span>: <span class="string">"Paris"</span>
+}</div>
+            <div class="sub-label">Exemple de reponse</div>
+            <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button>{
+  <span class="key">"statut"</span>: <span class="string">"trouve"</span>,
+  <span class="key">"confiance"</span>: <span class="number">0.92</span>,
+  <span class="key">"resultat"</span>: {
+    <span class="key">"siren"</span>: <span class="string">"123456789"</span>,
+    <span class="key">"siret"</span>: <span class="string">"12345678900010"</span>,
+    <span class="key">"denomination"</span>: <span class="string">"BOULANGERIE MARTIN SARL"</span>,
+    <span class="key">"adresse"</span>: <span class="string">"12 RUE DE LA PAIX 75002 PARIS"</span>,
+    <span class="key">"code_naf"</span>: <span class="string">"10.71C"</span>,
+    <span class="key">"categorie_juridique"</span>: <span class="string">"5710"</span>
+  }
+}</div>
+            <!-- Try it -->
+            <div class="try-it">
+              <h4>Tester en direct</h4>
+              <div class="try-row"><label>X-API-Key</label><input class="try-input" id="try-unitaire-key" placeholder="sk_siret_votre_cle"></div>
+              <div class="try-row"><label>Body JSON</label><textarea class="try-input" id="try-unitaire-body" rows="4" style="font-family:monospace;font-size:12px">{
+  "nom": "Boulangerie Martin",
+  "code_postal": "75002",
+  "ville": "Paris"
+}</textarea></div>
+              <button class="try-btn" onclick="tryEndpoint('POST', '/api/v1/siretisation/unitaire', 'try-unitaire-key', 'try-unitaire-body', 'try-unitaire-resp')">Envoyer la requete</button>
+              <div class="try-response" id="try-unitaire-resp"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- POST /batch/google-business -->
+        <div class="endpoint" id="post-batch-google">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-POST">POST</span>
+            <span class="endpoint-path">/api/v1/siretisation/batch/google-business</span>
+            <span class="endpoint-desc">Batch asynchrone (Google Business)</span>
+            <span class="endpoint-auth auth-key">Cle API</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Lance un traitement batch asynchrone en interrogeant Google Business pour enrichir les donnees avant le matching SIRENE. Retourne un ID de tache pour suivre la progression.</p>
+            <div class="sub-label">Parametres (body JSON)</div>
+            <table class="params-table">
+              <tr><th>Parametre</th><th>Type</th><th>Requis</th><th>Description</th></tr>
+              <tr><td><span class="param-name">etablissements</span></td><td><span class="param-type">array</span></td><td><span class="param-required">oui</span></td><td>Tableau d'objets {nom, adresse, code_postal, ville, ...}</td></tr>
+            </table>
+            <div class="sub-label">Codes de reponse</div>
+            <div class="response-codes">
+              <span class="resp-code resp-201">201 Created</span>
+              <span class="resp-code resp-400">400 Bad Request</span>
+              <span class="resp-code resp-401">401 Unauthorized</span>
+            </div>
+            <div class="sub-label">Exemple de reponse</div>
+            <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button>{
+  <span class="key">"tache_id"</span>: <span class="number">42</span>,
+  <span class="key">"type"</span>: <span class="string">"batch_google"</span>,
+  <span class="key">"statut"</span>: <span class="string">"en_attente"</span>,
+  <span class="key">"total_fiches"</span>: <span class="number">150</span>,
+  <span class="key">"message"</span>: <span class="string">"Tache creee avec succes. Utilisez GET /api/v1/taches/42 pour suivre la progression."</span>
+}</div>
+          </div>
+        </div>
+
+        <!-- POST /batch/fichier -->
+        <div class="endpoint" id="post-batch-fichier">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-POST">POST</span>
+            <span class="endpoint-path">/api/v1/siretisation/batch/fichier</span>
+            <span class="endpoint-desc">Batch asynchrone (upload fichier)</span>
+            <span class="endpoint-auth auth-key">Cle API</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Upload un fichier CSV/XLSX contenant une liste d'etablissements et lance le matching batch asynchrone. Taille max : 50 Mo.</p>
+            <div class="sub-label">Parametres (multipart/form-data)</div>
+            <table class="params-table">
+              <tr><th>Parametre</th><th>Type</th><th>Requis</th><th>Description</th></tr>
+              <tr><td><span class="param-name">fichier</span></td><td><span class="param-type">file</span></td><td><span class="param-required">oui</span></td><td>Fichier CSV ou XLSX (max 50 Mo)</td></tr>
+            </table>
+            <div class="sub-label">Codes de reponse</div>
+            <div class="response-codes">
+              <span class="resp-code resp-201">201 Created</span>
+              <span class="resp-code resp-400">400 Bad Request</span>
+              <span class="resp-code resp-401">401 Unauthorized</span>
+            </div>
+            <div class="sub-label">Exemple avec cURL</div>
+            <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button>curl -X POST https://srv1.net-it-be.com:3001/api/v1/siretisation/batch/fichier \
+  -H <span class="string">"X-API-Key: sk_siret_votre_cle"</span> \
+  -F <span class="string">"fichier=@etablissements.csv"</span></div>
+          </div>
+        </div>
+
+        <!-- ===== TACHES ===== -->
+        <div class="section-title"><span class="icon">📋</span> Suivi des Taches</div>
+
+        <!-- GET /:id -->
+        <div class="endpoint" id="get-tache-statut">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-GET">GET</span>
+            <span class="endpoint-path">/api/v1/taches/:id</span>
+            <span class="endpoint-desc">Statut et progression d'une tache</span>
+            <span class="endpoint-auth auth-key">Cle API</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Retourne le statut actuel et la progression d'une tache batch. Utilisez cette route pour implementer un polling de suivi.</p>
+            <div class="sub-label">Parametres URL</div>
+            <table class="params-table">
+              <tr><th>Parametre</th><th>Type</th><th>Description</th></tr>
+              <tr><td><span class="param-name">:id</span></td><td><span class="param-type">integer</span></td><td>ID de la tache</td></tr>
+            </table>
+            <div class="sub-label">Exemple de reponse</div>
+            <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button>{
+  <span class="key">"id"</span>: <span class="number">42</span>,
+  <span class="key">"type"</span>: <span class="string">"batch_google"</span>,
+  <span class="key">"statut"</span>: <span class="string">"en_cours"</span>,
+  <span class="key">"total_fiches"</span>: <span class="number">150</span>,
+  <span class="key">"fiches_traitees"</span>: <span class="number">87</span>,
+  <span class="key">"fiches_matchees"</span>: <span class="number">72</span>,
+  <span class="key">"fiches_incertaines"</span>: <span class="number">10</span>,
+  <span class="key">"fiches_echouees"</span>: <span class="number">5</span>,
+  <span class="key">"progression"</span>: <span class="number">58</span>,
+  <span class="key">"date_debut"</span>: <span class="string">"2026-03-28T14:30:00Z"</span>
+}</div>
+            <!-- Try it -->
+            <div class="try-it">
+              <h4>Tester en direct</h4>
+              <div class="try-row"><label>X-API-Key</label><input class="try-input" id="try-statut-key" placeholder="sk_siret_votre_cle"></div>
+              <div class="try-row"><label>ID Tache</label><input class="try-input" id="try-statut-id" placeholder="42" value="40"></div>
+              <button class="try-btn" onclick="tryGetEndpoint('/api/v1/taches/' + document.getElementById('try-statut-id').value, 'try-statut-key', 'try-statut-resp')">Envoyer la requete</button>
+              <div class="try-response" id="try-statut-resp"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GET /:id/resultats -->
+        <div class="endpoint" id="get-tache-resultats">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-GET">GET</span>
+            <span class="endpoint-path">/api/v1/taches/:id/resultats</span>
+            <span class="endpoint-desc">Resultats detailles d'une tache</span>
+            <span class="endpoint-auth auth-key">Cle API</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Retourne la liste complete des resultats de matching pour une tache terminee, avec les SIREN/SIRET trouves et les scores de confiance.</p>
+            <div class="sub-label">Parametres URL</div>
+            <table class="params-table">
+              <tr><th>Parametre</th><th>Type</th><th>Description</th></tr>
+              <tr><td><span class="param-name">:id</span></td><td><span class="param-type">integer</span></td><td>ID de la tache</td></tr>
+            </table>
+            <div class="sub-label">Codes de reponse</div>
+            <div class="response-codes">
+              <span class="resp-code resp-200">200 OK</span>
+              <span class="resp-code resp-401">401 Unauthorized</span>
+              <span class="resp-code resp-500">500 Server Error</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- GET /:id/resultats/export -->
+        <div class="endpoint" id="get-tache-export">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-GET">GET</span>
+            <span class="endpoint-path">/api/v1/taches/:id/resultats/export</span>
+            <span class="endpoint-desc">Export XLSX des resultats</span>
+            <span class="endpoint-auth auth-key">Cle API</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Telecharge les resultats de matching sous forme de fichier Excel (.xlsx). Ideal pour l'integration dans des outils bureautiques.</p>
+            <div class="sub-label">Reponse</div>
+            <p style="font-size:13px; color:#4a5568;">Retourne un fichier binaire <code>application/vnd.openxmlformats-officedocument.spreadsheetml.sheet</code> avec le header <code>Content-Disposition: attachment</code>.</p>
+            <div class="sub-label">Exemple avec cURL</div>
+            <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button>curl -H <span class="string">"X-API-Key: sk_siret_votre_cle"</span> \
+  https://srv1.net-it-be.com:3001/api/v1/taches/42/resultats/export \
+  -o resultats_tache_42.xlsx</div>
+          </div>
+        </div>
+
+        <!-- GET /:id/logs -->
+        <div class="endpoint" id="get-tache-logs">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-GET">GET</span>
+            <span class="endpoint-path">/api/v1/taches/:id/logs</span>
+            <span class="endpoint-desc">Logs d'execution d'une tache</span>
+            <span class="endpoint-auth auth-key">Cle API</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Retourne les logs d'execution d'une tache pour le debugging et le suivi detaille du traitement.</p>
+            <div class="sub-label">Parametres URL</div>
+            <table class="params-table">
+              <tr><th>Parametre</th><th>Type</th><th>Description</th></tr>
+              <tr><td><span class="param-name">:id</span></td><td><span class="param-type">integer</span></td><td>ID de la tache</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <!-- ===== ADMINISTRATION ===== -->
+        <div class="section-title"><span class="icon">⚙️</span> Administration</div>
+
+        <!-- GET /admin/taches -->
+        <div class="endpoint" id="admin-taches">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-GET">GET</span>
+            <span class="endpoint-path">/api/v1/admin/taches</span>
+            <span class="endpoint-desc">Liste toutes les taches</span>
+            <span class="endpoint-auth auth-free">Libre</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Retourne la liste complete de toutes les taches (toutes cles API confondues), triees par ID decroissant. Utilise par le dashboard admin.</p>
+            <div class="sub-label">Exemple de reponse (extrait)</div>
+            <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button>{
+  <span class="key">"taches"</span>: [
+    {
+      <span class="key">"id"</span>: <span class="number">40</span>,
+      <span class="key">"type"</span>: <span class="string">"batch_fichier"</span>,
+      <span class="key">"statut"</span>: <span class="string">"erreur"</span>,
+      <span class="key">"total_fiches"</span>: <span class="number">5324</span>,
+      <span class="key">"fiches_traitees"</span>: <span class="number">4963</span>,
+      <span class="key">"fiches_matchees"</span>: <span class="number">4100</span>,
+      <span class="key">"fiches_incertaines"</span>: <span class="number">512</span>,
+      <span class="key">"fiches_echouees"</span>: <span class="number">351</span>,
+      <span class="key">"date_debut"</span>: <span class="string">"2026-03-28T15:03:00Z"</span>,
+      <span class="key">"date_fin"</span>: <span class="string">null</span>,
+      <span class="key">"message_erreur"</span>: <span class="string">"Doublon sur tache 39..."</span>,
+      <span class="key">"date_creation"</span>: <span class="string">"2026-03-28T15:03:00Z"</span>
+    }
+  ]
+}</div>
+            <!-- Try it -->
+            <div class="try-it">
+              <h4>Tester en direct</h4>
+              <button class="try-btn" onclick="tryFreeEndpoint('/api/v1/admin/taches', 'try-admin-taches-resp')">Envoyer la requete</button>
+              <div class="try-response" id="try-admin-taches-resp"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GET /admin/api-keys -->
+        <div class="endpoint" id="admin-keys-list">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-GET">GET</span>
+            <span class="endpoint-path">/api/v1/admin/api-keys</span>
+            <span class="endpoint-desc">Liste toutes les cles API</span>
+            <span class="endpoint-auth auth-free">Libre</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Retourne la liste de toutes les cles API enregistrees avec leurs statistiques d'utilisation.</p>
+            <div class="sub-label">Champs de la reponse</div>
+            <table class="params-table">
+              <tr><th>Champ</th><th>Type</th><th>Description</th></tr>
+              <tr><td><span class="param-name">id</span></td><td><span class="param-type">int</span></td><td>ID unique</td></tr>
+              <tr><td><span class="param-name">cle_api</span></td><td><span class="param-type">string</span></td><td>Cle API (sk_siret_...)</td></tr>
+              <tr><td><span class="param-name">nom</span></td><td><span class="param-type">string</span></td><td>Nom du client</td></tr>
+              <tr><td><span class="param-name">email</span></td><td><span class="param-type">string</span></td><td>Email du client</td></tr>
+              <tr><td><span class="param-name">societe</span></td><td><span class="param-type">string</span></td><td>Nom de la societe</td></tr>
+              <tr><td><span class="param-name">actif</span></td><td><span class="param-type">boolean</span></td><td>Cle active (1) ou inactive (0)</td></tr>
+              <tr><td><span class="param-name">nb_requetes</span></td><td><span class="param-type">int</span></td><td>Nombre total de requetes effectuees</td></tr>
+              <tr><td><span class="param-name">rate_limit</span></td><td><span class="param-type">int</span></td><td>Limite de requetes (0 = illimite)</td></tr>
+              <tr><td><span class="param-name">date_expiration</span></td><td><span class="param-type">datetime</span></td><td>Date d'expiration (null = jamais)</td></tr>
+              <tr><td><span class="param-name">permissions</span></td><td><span class="param-type">array</span></td><td>Liste des permissions</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <!-- POST /admin/api-keys -->
+        <div class="endpoint" id="admin-keys-create">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-POST">POST</span>
+            <span class="endpoint-path">/api/v1/admin/api-keys</span>
+            <span class="endpoint-desc">Creer une nouvelle cle API</span>
+            <span class="endpoint-auth auth-free">Libre</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Genere une nouvelle cle API avec le prefixe <code>sk_siret_</code> et 48 caracteres hexadecimaux aleatoires.</p>
+            <div class="sub-label">Parametres (body JSON)</div>
+            <table class="params-table">
+              <tr><th>Parametre</th><th>Type</th><th>Requis</th><th>Description</th></tr>
+              <tr><td><span class="param-name">nom</span></td><td><span class="param-type">string</span></td><td><span class="param-required">oui</span></td><td>Nom du client</td></tr>
+              <tr><td><span class="param-name">email</span></td><td><span class="param-type">string</span></td><td><span class="param-optional">non</span></td><td>Email du client</td></tr>
+              <tr><td><span class="param-name">societe</span></td><td><span class="param-type">string</span></td><td><span class="param-optional">non</span></td><td>Nom de la societe</td></tr>
+              <tr><td><span class="param-name">rate_limit</span></td><td><span class="param-type">int</span></td><td><span class="param-optional">non</span></td><td>Limite de requetes (defaut: 1000)</td></tr>
+              <tr><td><span class="param-name">date_expiration</span></td><td><span class="param-type">datetime</span></td><td><span class="param-optional">non</span></td><td>Date d'expiration ISO 8601</td></tr>
+              <tr><td><span class="param-name">permissions</span></td><td><span class="param-type">array</span></td><td><span class="param-optional">non</span></td><td>Liste de permissions</td></tr>
+            </table>
+            <div class="sub-label">Exemple de reponse (201)</div>
+            <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button>{
+  <span class="key">"id"</span>: <span class="number">2</span>,
+  <span class="key">"cle_api"</span>: <span class="string">"sk_siret_a1b2c3d4e5f6..."</span>,
+  <span class="key">"message"</span>: <span class="string">"Cle API creee avec succes"</span>
+}</div>
+          </div>
+        </div>
+
+        <!-- PUT /admin/api-keys/:id -->
+        <div class="endpoint" id="admin-keys-update">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-PUT">PUT</span>
+            <span class="endpoint-path">/api/v1/admin/api-keys/:id</span>
+            <span class="endpoint-desc">Modifier une cle API</span>
+            <span class="endpoint-auth auth-free">Libre</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Mise a jour partielle d'une cle API. Seuls les champs fournis sont modifies.</p>
+            <div class="sub-label">Parametres (body JSON) — tous optionnels</div>
+            <table class="params-table">
+              <tr><th>Parametre</th><th>Type</th><th>Description</th></tr>
+              <tr><td><span class="param-name">nom</span></td><td><span class="param-type">string</span></td><td>Nouveau nom</td></tr>
+              <tr><td><span class="param-name">email</span></td><td><span class="param-type">string</span></td><td>Nouvel email</td></tr>
+              <tr><td><span class="param-name">societe</span></td><td><span class="param-type">string</span></td><td>Nouvelle societe</td></tr>
+              <tr><td><span class="param-name">rate_limit</span></td><td><span class="param-type">int</span></td><td>Nouvelle limite</td></tr>
+              <tr><td><span class="param-name">date_expiration</span></td><td><span class="param-type">datetime</span></td><td>Nouvelle expiration</td></tr>
+              <tr><td><span class="param-name">actif</span></td><td><span class="param-type">boolean</span></td><td>Activer/desactiver</td></tr>
+              <tr><td><span class="param-name">permissions</span></td><td><span class="param-type">array</span></td><td>Nouvelles permissions</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <!-- DELETE /admin/api-keys/:id -->
+        <div class="endpoint" id="admin-keys-delete">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-DELETE">DELETE</span>
+            <span class="endpoint-path">/api/v1/admin/api-keys/:id</span>
+            <span class="endpoint-desc">Supprimer une cle API</span>
+            <span class="endpoint-auth auth-free">Libre</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Supprime definitivement une cle API. Cette action est irreversible.</p>
+            <div class="sub-label">Exemple de reponse</div>
+            <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button>{ <span class="key">"message"</span>: <span class="string">"Cle API supprimee"</span> }</div>
+          </div>
+        </div>
+
+        <!-- ===== SYSTEME ===== -->
+        <div class="section-title"><span class="icon">💚</span> Systeme</div>
+
+        <!-- Health -->
+        <div class="endpoint" id="health">
+          <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+            <span class="method method-GET">GET</span>
+            <span class="endpoint-path">/api/v1/health</span>
+            <span class="endpoint-desc">Verification de l'etat du service</span>
+            <span class="endpoint-auth auth-free">Libre</span>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="endpoint-body">
+            <p style="font-size:14px; color:#4a5568; margin-bottom:12px;">Verifie que l'API est operationnelle et que la connexion a la base de donnees fonctionne.</p>
+            <div class="sub-label">Exemple de reponse</div>
+            <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copier</button>{
+  <span class="key">"status"</span>: <span class="string">"ok"</span>,
+  <span class="key">"database"</span>: <span class="string">"connected"</span>,
+  <span class="key">"timestamp"</span>: <span class="string">"2026-03-28T16:55:07.014Z"</span>
+}</div>
+            <!-- Try it -->
+            <div class="try-it">
+              <h4>Tester en direct</h4>
+              <button class="try-btn" onclick="tryFreeEndpoint('/api/v1/health', 'try-health-resp')">Envoyer la requete</button>
+              <div class="try-response" id="try-health-resp"></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /main-content -->
+    </div><!-- /layout -->
+  </div><!-- /container -->
+
+  <script>
+    function copyCode(btn) {
+      const block = btn.parentElement;
+      const text = block.textContent.replace('Copier', '').trim();
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'Copie !';
+        setTimeout(() => btn.textContent = 'Copier', 1500);
+      });
+    }
+
+    const BASE = window.location.origin;
+
+    async function tryEndpoint(method, path, keyInputId, bodyInputId, responseId) {
+      const key = document.getElementById(keyInputId).value;
+      const body = document.getElementById(bodyInputId).value;
+      const respDiv = document.getElementById(responseId);
+      respDiv.innerHTML = '<div style="color:#718096;font-size:13px;">Envoi en cours...</div>';
+
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (key) headers['X-API-Key'] = key;
+        const res = await fetch(BASE + path, { method, headers, body });
+        const data = await res.json();
+        const statusClass = res.status < 300 ? 's2xx' : res.status < 500 ? 's4xx' : 's5xx';
+        respDiv.innerHTML = '<div class="try-status ' + statusClass + '">HTTP ' + res.status + ' ' + res.statusText + '</div><div class="code-block">' + JSON.stringify(data, null, 2) + '</div>';
+      } catch (e) {
+        respDiv.innerHTML = '<div class="try-status s5xx">Erreur : ' + e.message + '</div>';
+      }
+    }
+
+    async function tryGetEndpoint(path, keyInputId, responseId) {
+      const key = document.getElementById(keyInputId).value;
+      const respDiv = document.getElementById(responseId);
+      respDiv.innerHTML = '<div style="color:#718096;font-size:13px;">Envoi en cours...</div>';
+
+      try {
+        const headers = {};
+        if (key) headers['X-API-Key'] = key;
+        const res = await fetch(BASE + path, { headers });
+        const data = await res.json();
+        const statusClass = res.status < 300 ? 's2xx' : res.status < 500 ? 's4xx' : 's5xx';
+        respDiv.innerHTML = '<div class="try-status ' + statusClass + '">HTTP ' + res.status + ' ' + res.statusText + '</div><div class="code-block">' + JSON.stringify(data, null, 2) + '</div>';
+      } catch (e) {
+        respDiv.innerHTML = '<div class="try-status s5xx">Erreur : ' + e.message + '</div>';
+      }
+    }
+
+    async function tryFreeEndpoint(path, responseId) {
+      const respDiv = document.getElementById(responseId);
+      respDiv.innerHTML = '<div style="color:#718096;font-size:13px;">Envoi en cours...</div>';
+
+      try {
+        const res = await fetch(BASE + path);
+        const data = await res.json();
+        const statusClass = res.status < 300 ? 's2xx' : res.status < 500 ? 's4xx' : 's5xx';
+        const json = JSON.stringify(data, null, 2);
+        const truncated = json.length > 3000 ? json.substring(0, 3000) + '\n\n... (tronque, ' + json.length + ' caracteres au total)' : json;
+        respDiv.innerHTML = '<div class="try-status ' + statusClass + '">HTTP ' + res.status + ' ' + res.statusText + '</div><div class="code-block" style="max-height:400px;overflow-y:auto;">' + truncated + '</div>';
+      } catch (e) {
+        respDiv.innerHTML = '<div class="try-status s5xx">Erreur : ' + e.message + '</div>';
+      }
+    }
+
+    // Smooth scroll for TOC
+    document.querySelectorAll('.toc a').forEach(a => {
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        const target = document.querySelector(a.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          // Open the endpoint
+          if (target.classList.contains('endpoint')) {
+            target.classList.add('open');
+          }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,277 @@
+/**
+ * PASSE I v3 - Siretisation via Firecrawl Search (Google)
+ * Corrections v3:
+ *  - Requete 1: nom + adresse (comme v2)
+ *  - Requete 2 (fallback): adresse seule si Q1 insuffisante
+ *  - Fusion des candidats des 2 requetes
+ *  - Score base 55, commune matching, multi-source prioritaire
+ *  - Comparaison commune en plus du CP
+ *  - Firecrawl multi-sources (>=2) TOUJOURS prioritaire sur ancien score
+ *  - Extraction SIREN depuis URL avec segments /xxx-SIREN ou /SIREN
+ */
+const https = require('https');
+const mysql = require('mysql2/promise');
+const fs = require('fs');
+
+const FC_KEY = 'fc-e148b6e97c474d47bfa7687bb4eb1b6a';
+const TRUSTED_DOMAINS = [
+  'annuaire-entreprises.data.gouv.fr',
+  'www.societe.com',
+  'www.pappers.fr',
+  'entreprises.lefigaro.fr',
+  'api-avis-situation-sirene.insee.fr'
+];
+const DELAY_MS = 1500;
+
+function firecrawlSearch(query) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ query, limit: 5 });
+    const opts = {
+      hostname: 'api.firecrawl.dev', path: '/v1/search', method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+FC_KEY, 'Content-Length':Buffer.byteLength(body) }
+    };
+    const req = https.request(opts, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => { try{resolve(JSON.parse(data))}catch(e){reject(new Error('JSON parse: '+data.substring(0,200)))} });
+    });
+    req.on('error', reject);
+    req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout')); });
+    req.write(body); req.end();
+  });
+}
+
+function extractSirens(results) {
+  const found = [];
+  if (!results.data) return found;
+  for (const r of results.data) {
+    const url = r.url || '', title = r.title || '', desc = r.description || '', markdown = r.markdown || '';
+    const text = url + ' ' + title + ' ' + desc + ' ' + markdown.substring(0, 2000);
+    const domain = TRUSTED_DOMAINS.find(d => url.includes(d));
+    if (!domain) continue;
+    const nums = new Set();
+    // Extract from URL path segments (e.g. /entreprise/xxx-814811774 or /814811774)
+    const urlSegments = url.match(/[\/-](\d{9,14})(?:[\/?\-#]|$)/g) || [];
+    urlSegments.forEach(s => { const m = s.match(/(\d{9,14})/); if (m) nums.add(m[1]); });
+    // Standard patterns
+    (url.match(/\d{9,14}/g) || []).forEach(n => nums.add(n));
+    (text.match(/\b\d{9}\b/g) || []).forEach(n => nums.add(n));
+    (text.match(/\b\d{14}\b/g) || []).forEach(n => nums.add(n));
+    // Spaced patterns: 814 811 774 or 814 811 774 00011
+    (text.match(/\b\d{3}\s\d{3}\s\d{3}(?:\s\d{5})?\b/g) || []).forEach(n => nums.add(n.replace(/\s/g, '')));
+    for (const n of nums) {
+      if (n.length === 9 || n.length === 14) {
+        found.push({ siren: n.substring(0, 9), siret: n.length === 14 ? n : null, domain, url: url.substring(0, 120), rank: results.data.indexOf(r) });
+      }
+    }
+  }
+  return found;
+}
+
+function scoreFiche(candidates) {
+  if (candidates.length === 0) return null;
+  const sirenInfo = {};
+  for (const c of candidates) {
+    if (!sirenInfo[c.siren]) sirenInfo[c.siren] = { count: 0, siret: null, domains: new Set(), bestRank: 99 };
+    sirenInfo[c.siren].count++;
+    sirenInfo[c.siren].domains.add(c.domain);
+    if (c.siret) sirenInfo[c.siren].siret = c.siret;
+    if (c.rank < sirenInfo[c.siren].bestRank) sirenInfo[c.siren].bestRank = c.rank;
+  }
+  return Object.entries(sirenInfo)
+    .sort((a, b) => b[1].domains.size - a[1].domains.size || b[1].count - a[1].count || a[1].bestRank - b[1].bestRank)
+    .map(([siren, info]) => ({ siren, siret: info.siret, sourceCount: info.domains.size, domains: [...info.domains], bestRank: info.bestRank }));
+}
+
+function normalizeCommune(s) {
+  if (!s) return '';
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[-']/g, ' ').replace(/\b(st|ste)\b/g, 'saint').replace(/\s+/g, ' ').trim();
+}
+
+async function validateSiren(conn, siren, gbRec) {
+  const [rows] = await conn.query(
+    `SELECT e.siren, et.siret, e.denomination, COALESCE(e.denomination_usuelle_1,'') as denom_usuelle,
+     COALESCE(et.enseigne_1,'') as enseigne, et.libelle_commune, et.code_postal,
+     CONCAT(COALESCE(et.numero_voie,''),' ',COALESCE(et.type_voie,''),' ',COALESCE(et.libelle_voie,'')) as adresse,
+     et.activite_principale as naf
+     FROM entreprises e JOIN etablissements et ON e.siren=et.siren
+     WHERE e.siren=? AND et.etat_administratif='A' ORDER BY et.etablissement_siege DESC LIMIT 5`, [siren]);
+  if (!rows.length) return null;
+  // Find best matching etablissement
+  let best = rows[0];
+  for (const row of rows) {
+    if (row.code_postal === gbRec.gb_code_postal) { best = row; break; }
+  }
+  const cpMatch = best.code_postal === gbRec.gb_code_postal;
+  // Commune comparison (handles code commune vs code postal mismatch)
+  const gbVille = normalizeCommune(gbRec.gb_ville);
+  const sirCommune = normalizeCommune(best.libelle_commune);
+  const communeMatch = gbVille && sirCommune && (
+    sirCommune.includes(gbVille.split(' ')[0]) || gbVille.includes(sirCommune.split(' ')[0])
+  );
+  // Also try: GB adresse contains commune name
+  const gbAdresse = normalizeCommune(gbRec.gb_adresse || '');
+  const adresseHasCommune = sirCommune && gbAdresse.includes(sirCommune.split(' ')[0]);
+  return { ...best, cpMatch, communeMatch: communeMatch || adresseHasCommune, geoMatch: cpMatch || communeMatch || adresseHasCommune };
+}
+
+function computeScoreI(candidates, validations, gbRec) {
+  if (!candidates || !candidates.length) return { score: 0, statut: 'ECHOUEE', siret: null, siren: null, methode: null, denomination: null, multiSource: false };
+  let bestScore = 0, bestMatch = null;
+  for (const cand of candidates) {
+    const val = validations[cand.siren];
+    if (!val) continue;
+    let score = 55; // base score (v2: was 40)
+    // Sources bonus
+    if (cand.sourceCount >= 3) score += 20;
+    else if (cand.sourceCount >= 2) score += 15; // v2: was 10
+    // Geo bonus
+    if (val.cpMatch) score += 20; // v2: was 25
+    else if (val.communeMatch) score += 15; // v2: NEW - commune match
+    // Rank bonus
+    if (cand.bestRank === 0) score += 10;
+    else if (cand.bestRank <= 2) score += 5;
+    score = Math.min(100, score);
+    if (score > bestScore) { bestScore = score; bestMatch = { ...cand, validation: val, score }; }
+  }
+  if (!bestMatch) return { score: 0, statut: 'ECHOUEE', siret: null, siren: null, methode: null, denomination: null, multiSource: false };
+  const statut = bestScore >= 80 ? 'MATCHEE' : bestScore >= 50 ? 'INCERTAINE' : 'ECHOUEE';
+  return {
+    score: bestScore, statut, siren: bestMatch.siren, siret: bestMatch.validation.siret,
+    methode: 'passe_I_firecrawl_v3', denomination: bestMatch.validation.denomination,
+    multiSource: bestMatch.sourceCount >= 2,
+    details: { sources: bestMatch.sourceCount, domains: bestMatch.domains, cpMatch: bestMatch.validation.cpMatch, communeMatch: bestMatch.validation.communeMatch, rank: bestMatch.bestRank }
+  };
+}
+
+async function main() {
+  const inputFile = process.argv[2] || '/home/netit972/siretisation_v12.json';
+  const outputFile = process.argv[3] || '/home/netit972/siretisation_v15_firecrawl.json';
+  const maxRecords = parseInt(process.argv[4]) || 999;
+
+  console.log('=== PASSE I v2 - FIRECRAWL SEARCH ===');
+  console.log('Input:', inputFile);
+  console.log('Output:', outputFile);
+
+  const results = JSON.parse(fs.readFileSync(inputFile));
+  const limited = results.filter(r => (r.score || 0) < 80).slice(0, maxRecords);
+  console.log(`Total fiches: ${results.length}, Score < 80: ${limited.length}, A traiter: ${limited.length}`);
+
+  const conn = await mysql.createConnection({ host: 'localhost', user: 'netit972_netit972_sirene_usr', password: 'KjaQ5RjwHDAM3cA6fJyX', database: 'netit972_netit972_sirene_db' });
+
+  let improved = 0, noResult = 0, errors = 0, forced = 0;
+
+  for (let i = 0; i < limited.length; i++) {
+    const rec = limited[i];
+    const idx = results.indexOf(rec);
+    const nom = rec.gb_nom || rec.nom_gb || '';
+    const adresse = rec.gb_adresse || rec.adresse_gb || '';
+    const cp = rec.gb_code_postal || rec.code_postal || '';
+    const ville = rec.gb_ville || rec.ville || '';
+    const cat = rec.gb_categorie || rec.categorie || '';
+
+    // --- Requete 1: nom + adresse ---
+      const query1 = `siren siret ${nom} ${adresse.split(',')[0]} ${cp} ${ville} ${cat}`.substring(0, 200);
+
+    try {
+      const fcResults1 = await firecrawlSearch(query1);
+      let candidates = extractSirens(fcResults1);
+      let scored = scoreFiche(candidates);
+
+      // --- Requete 2 (fallback): adresse seule si Q1 insuffisante ---
+      const bestQ1 = scored && scored.length > 0 ? scored[0].sourceCount : 0;
+      if (bestQ1 < 2 && adresse) {
+        const adressePart = adresse.split(',')[0].trim();
+        const query2 = `siren siret ${adressePart} ${cp} ${ville}`.substring(0, 200);
+        console.log(`  -> Fallback Q2: ${query2}`);
+        await new Promise(r => setTimeout(r, DELAY_MS));
+        const fcResults2 = await firecrawlSearch(query2);
+        const candidates2 = extractSirens(fcResults2);
+        // Fusionner: ajouter les candidats Q2 aux candidats Q1
+        for (const c2 of candidates2) {
+          const existing = candidates.find(c => c.siren === c2.siren);
+          if (!existing) {
+            candidates.push(c2);
+          } else if (!existing.siret && c2.siret) {
+            existing.siret = c2.siret;
+          }
+          // Le domain sera compté dans scoreFiche via le Set
+        }
+        // Fusionner les candidats bruts et re-scorer
+        candidates = [...candidates, ...candidates2];
+        scored = scoreFiche(candidates);
+      }
+
+      if (!scored || scored.length === 0) {
+        console.log(`[${i+1}/${limited.length}] #${rec.gb_id||rec.id} ${nom.substring(0,40)} ... aucun SIREN`);
+        noResult++;
+        continue;
+      }
+
+      const validations = {};
+      for (const cand of scored.slice(0, 5)) {
+        const val = await validateSiren(conn, cand.siren, rec);
+        if (val) validations[cand.siren] = val;
+      }
+
+      const result = computeScoreI(scored, validations, rec);
+
+      if (!result.siren) {
+        console.log(`[${i+1}/${limited.length}] #${rec.gb_id||rec.id} ${nom.substring(0,40)} ... aucun SIREN valide`);
+        noResult++;
+        continue;
+      }
+
+      // v2: FORCE replacement if multi-source (>=2 trusted domains found same SIREN)
+      const shouldReplace = result.score > rec.score || (result.multiSource && result.siren !== (rec.sir_siren || rec.siren));
+      
+      if (shouldReplace) {
+        const wasForced = result.score <= rec.score;
+        results[idx] = {
+          ...results[idx],
+          sir_siren: result.siren,
+          sir_siret: result.siret,
+          sir_denomination: result.denomination,
+          score: Math.max(result.score, wasForced ? 75 : result.score), // forced = min 75
+          statut: result.score >= 80 ? 'MATCHEE' : (result.multiSource ? 'MATCHEE' : result.statut),
+          methode: result.methode,
+          sir_denomination_usuelle: validations[result.siren]?.denom_usuelle || '',
+          sir_enseigne_1: validations[result.siren]?.enseigne || '',
+          sir_adresse: validations[result.siren]?.adresse || '',
+          sir_code_postal: validations[result.siren]?.code_postal || '',
+          sir_commune: validations[result.siren]?.libelle_commune || '',
+          sir_naf: validations[result.siren]?.naf || '',
+          details: result.details
+        };
+        improved++;
+        if (wasForced) forced++;
+        const tag = wasForced ? 'FORCE' : '';
+        console.log(` ${rec.score||0}->${results[idx].score} ${results[idx].statut} (${result.siren}) CP:${result.details.cpMatch?'OUI':'NON'} COM:${result.details.communeMatch?'OUI':'NON'} src:${result.details.sources} ${tag} [${i+1}/${limited.length}] #${rec.gb_id||rec.id} ${nom.substring(0,35)}`);
+      } else {
+        console.log(` score ${result.score} <= ancien ${rec.score}, conserve [${i+1}/${limited.length}] #${rec.gb_id||rec.id} ${nom.substring(0,35)}`);
+      }
+    } catch (err) {
+      console.log(` ERR: ${err.message?.substring(0, 60)} [${i+1}/${limited.length}] #${rec.gb_id||rec.id}`);
+      errors++;
+    }
+
+    if (i < limited.length - 1) await new Promise(r => setTimeout(r, DELAY_MS));
+  }
+
+  fs.writeFileSync(outputFile, JSON.stringify(results, null, 2));
+
+  const stats = { MATCHEE: 0, INCERTAINE: 0, ECHOUEE: 0 };
+  results.forEach(r => stats[r.statut]++);
+
+  console.log('\n=== RESULTATS PASSE I v3 ===');
+  console.log(`Fiches traitees: ${limited.length}`);
+  console.log(`Ameliorees: ${improved} (dont ${forced} forcees multi-source)`);
+  console.log(`Sans resultat: ${noResult}`);
+  console.log(`Erreurs: ${errors}`);
+  console.log(`Distribution: MATCHEE:${stats.MATCHEE} INCERTAINE:${stats.INCERTAINE} ECHOUEE:${stats.ECHOUEE}`);
+  console.log(`Resultats sauves: ${outputFile}`);
+
+  await conn.end();
+}
+
+main().catch(e => { console.error(e); process.exit(1); });

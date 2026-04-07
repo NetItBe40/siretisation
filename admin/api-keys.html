@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Siretisation - Gestion des cles API</title>
+<style>
+  :root { --primary: #2563eb; --success: #16a34a; --warning: #d97706; --danger: #dc2626; --gray: #64748b; --bg: #f1f5f9; --card: #fff; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: #1e293b; }
+  .header { background: linear-gradient(135deg, #1e3a5f, #2563eb); color: #fff; padding: 1.5rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 1.4rem; font-weight: 600; }
+  .header nav a { color: rgba(255,255,255,.8); text-decoration: none; margin-left: 1.5rem; font-size: .9rem; }
+  .header nav a:hover { color: #fff; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+  .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: .5rem; }
+  .btn { padding: .6rem 1.2rem; border: none; border-radius: 6px; font-size: .85rem; font-weight: 600; cursor: pointer; transition: all .2s; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: #b91c1c; }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-success:hover { background: #15803d; }
+  .btn-sm { padding: .3rem .7rem; font-size: .78rem; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  th { background: #f8fafc; text-align: left; padding: .8rem 1rem; font-size: .75rem; text-transform: uppercase; color: var(--gray); letter-spacing: .5px; border-bottom: 2px solid #e2e8f0; }
+  td { padding: .8rem 1rem; font-size: .85rem; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  tr:hover { background: #f8fafc; }
+  .badge { display: inline-block; padding: .2rem .6rem; border-radius: 20px; font-size: .75rem; font-weight: 600; }
+  .badge-actif { background: #d1fae5; color: #065f46; }
+  .badge-inactif { background: #fee2e2; color: #991b1b; }
+  .key-display { font-family: 'Courier New', monospace; font-size: .78rem; background: #f1f5f9; padding: .3rem .5rem; border-radius: 4px; word-break: break-all; max-width: 220px; display: inline-block; }
+  .key-masked { cursor: pointer; }
+  .client-info { font-size: .8rem; line-height: 1.5; }
+  .client-info .societe { font-weight: 600; }
+  .client-info .email { color: var(--gray); }
+  .usage-info { font-size: .8rem; }
+  .usage-bar { width: 80px; height: 6px; background: #e2e8f0; border-radius: 3px; display: inline-block; vertical-align: middle; margin-left: 4px; }
+  .usage-fill { height: 100%; border-radius: 3px; }
+  .empty { text-align: center; padding: 3rem; color: var(--gray); }
+
+  /* Modal */
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.5); display: none; justify-content: center; align-items: center; z-index: 100; }
+  .modal-overlay.active { display: flex; }
+  .modal { background: var(--card); border-radius: 12px; padding: 2rem; width: 90%; max-width: 550px; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+  .modal h2 { margin-bottom: 1.5rem; font-size: 1.2rem; }
+  .form-group { margin-bottom: 1rem; }
+  .form-group label { display: block; font-size: .8rem; font-weight: 600; color: var(--gray); margin-bottom: .3rem; text-transform: uppercase; letter-spacing: .3px; }
+  .form-group input, .form-group select { width: 100%; padding: .6rem .8rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: .9rem; }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .form-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.5rem; }
+  .btn-cancel { background: #e2e8f0; color: #475569; }
+  .btn-cancel:hover { background: #cbd5e1; }
+
+  .toast { position: fixed; bottom: 2rem; right: 2rem; padding: .8rem 1.5rem; border-radius: 8px; color: #fff; font-size: .85rem; font-weight: 500; z-index: 200; transform: translateY(100px); opacity: 0; transition: all .3s; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { background: var(--success); }
+  .toast.error { background: var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Siretisation - Cles API</h1>
+  <nav>
+    <a href="/admin/taches">Taches</a>
+    <a href="/admin/api-keys">Cles API</a>
+          <a href="/admin/documentation">Documentation</a>
+                                <a href="/admin/qualite">Qualité</a>
+                </nav>
+</div>
+
+<div class="container">
+  <div class="top-bar">
+    <div>
+      <strong id="keyCount">-</strong> cles API enregistrees
+    </div>
+    <button class="btn btn-primary" onclick="openModal()">+ Nouvelle cle API</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Client</th>
+        <th>Cle API</th>
+        <th>Statut</th>
+        <th>Utilisation</th>
+        <th>Limite</th>
+        <th>Expiration</th>
+        <th>Cree le</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<!-- Modal creation/edition -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2 id="modalTitle">Nouvelle cle API</h2>
+    <input type="hidden" id="editId" value="">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Nom / Label</label>
+        <input type="text" id="fNom" placeholder="Ex: Client-MonEntreprise">
+      </div>
+      <div class="form-group">
+        <label>Societe</label>
+        <input type="text" id="fSociete" placeholder="Ex: MonEntreprise SAS">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="fEmail" placeholder="contact@entreprise.fr">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Limite requetes / jour</label>
+        <input type="number" id="fRateLimit" value="1000" min="0">
+      </div>
+      <div class="form-group">
+        <label>Date d'expiration (optionnel)</label>
+        <input type="date" id="fExpiration">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Permissions</label>
+      <select id="fPerms" multiple style="height:80px">
+        <option value="batch_google" selected>Batch Google Business</option>
+        <option value="batch_fichier" selected>Batch Fichier (CSV/XLSX)</option>
+        <option value="unitaire" selected>Siretisation unitaire</option>
+        <option value="taches" selected>Consultation taches</option>
+      </select>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-cancel" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveKey()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API_BASE = window.location.origin;
+
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function formatDate(d) {
+  if (!d) return '-';
+  return new Date(d).toLocaleDateString('fr-FR');
+}
+
+function openModal(key) {
+  document.getElementById('modal').classList.add('active');
+  if (key) {
+    document.getElementById('modalTitle').textContent = 'Modifier cle #' + key.id;
+    document.getElementById('editId').value = key.id;
+    document.getElementById('fNom').value = key.nom || '';
+    document.getElementById('fSociete').value = key.societe || '';
+    document.getElementById('fEmail').value = key.email || '';
+    document.getElementById('fRateLimit').value = key.rate_limit || 1000;
+    document.getElementById('fExpiration').value = key.date_expiration ? key.date_expiration.split('T')[0] : '';
+    const perms = key.permissions || [];
+    Array.from(document.getElementById('fPerms').options).forEach(o => {
+      o.selected = perms.includes(o.value);
+    });
+  } else {
+    document.getElementById('modalTitle').textContent = 'Nouvelle cle API';
+    document.getElementById('editId').value = '';
+    document.getElementById('fNom').value = '';
+    document.getElementById('fSociete').value = '';
+    document.getElementById('fEmail').value = '';
+    document.getElementById('fRateLimit').value = 1000;
+    document.getElementById('fExpiration').value = '';
+    Array.from(document.getElementById('fPerms').options).forEach(o => o.selected = true);
+  }
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+}
+
+async function saveKey() {
+  const id = document.getElementById('editId').value;
+  const body = {
+    nom: document.getElementById('fNom').value,
+    email: document.getElementById('fEmail').value,
+    societe: document.getElementById('fSociete').value,
+    rate_limit: parseInt(document.getElementById('fRateLimit').value) || 1000,
+    date_expiration: document.getElementById('fExpiration').value || null,
+    permissions: Array.from(document.getElementById('fPerms').selectedOptions).map(o => o.value)
+  };
+
+  try {
+    const url = id ? `${API_BASE}/api/v1/admin/api-keys/${id}` : `${API_BASE}/api/v1/admin/api-keys`;
+    const res = await fetch(url, {
+      method: id ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erreur');
+
+    closeModal();
+    if (data.cle_api) {
+      showToast('Cle creee ! Copiez-la, elle ne sera plus visible en entier.');
+      alert('Nouvelle cle API :\n\n' + data.cle_api + '\n\nCopiez-la maintenant, elle ne sera plus affichee en entier.');
+    } else {
+      showToast('Cle mise a jour');
+    }
+    loadKeys();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function toggleKey(id, actif) {
+  if (!confirm(actif ? 'Reactiver cette cle ?' : 'Desactiver cette cle ?')) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/admin/api-keys/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actif })
+    });
+    if (!res.ok) throw new Error('Erreur');
+    showToast(actif ? 'Cle reactivee' : 'Cle desactivee');
+    loadKeys();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function deleteKey(id) {
+  if (!confirm('Supprimer definitivement cette cle API ?')) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/admin/api-keys/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Erreur');
+    showToast('Cle supprimee');
+    loadKeys();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function maskKey(key) {
+  if (!key) return '-';
+  return key.substring(0, 12) + '...' + key.substring(key.length - 6);
+}
+
+let allKeys = [];
+
+async function loadKeys() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/admin/api-keys`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    allKeys = data.keys || data;
+
+    document.getElementById('keyCount').textContent = allKeys.length;
+
+    const tbody = document.getElementById('tbody');
+    if (allKeys.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="empty">Aucune cle API</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = allKeys.map(k => {
+      const perms = k.permissions || [];
+      const usagePct = k.rate_limit > 0 ? Math.min(100, Math.round(k.nb_requetes / k.rate_limit * 100)) : 0;
+      const usageColor = usagePct > 80 ? '#dc2626' : usagePct > 50 ? '#d97706' : '#16a34a';
+      const expired = k.date_expiration && new Date(k.date_expiration) < new Date();
+
+      return `<tr>
+        <td><strong>#${k.id}</strong></td>
+        <td>
+          <div class="client-info">
+            <div class="societe">${k.societe || k.nom || '-'}</div>
+            <div>${k.nom || ''}</div>
+            <div class="email">${k.email || ''}</div>
+          </div>
+        </td>
+        <td><span class="key-display">${maskKey(k.cle_api)}</span></td>
+        <td>
+          <span class="badge ${k.actif ? 'badge-actif' : 'badge-inactif'}">${k.actif ? 'Actif' : 'Inactif'}</span>
+          ${expired ? '<br><span class="badge badge-inactif" style="margin-top:4px">Expire</span>' : ''}
+        </td>
+        <td>
+          <div class="usage-info">
+            ${k.nb_requetes.toLocaleString()} req
+            <div class="usage-bar"><div class="usage-fill" style="width:${usagePct}%;background:${usageColor}"></div></div>
+          </div>
+          <div style="font-size:.72rem;color:var(--gray)">Dernier: ${k.derniere_utilisation ? formatDate(k.derniere_utilisation) : 'jamais'}</div>
+        </td>
+        <td>${k.rate_limit ? k.rate_limit.toLocaleString() + '/j' : 'Illimite'}</td>
+        <td>${k.date_expiration ? formatDate(k.date_expiration) : 'Jamais'}</td>
+        <td>${formatDate(k.date_creation)}</td>
+        <td>
+          <button class="btn btn-sm btn-primary" onclick='openModal(${JSON.stringify(k)})'>Modifier</button>
+          ${k.actif
+            ? `<button class="btn btn-sm btn-danger" onclick="toggleKey(${k.id}, false)" style="margin-top:4px">Desactiver</button>`
+            : `<button class="btn btn-sm btn-success" onclick="toggleKey(${k.id}, true)" style="margin-top:4px">Reactiver</button>`}
+          <button class="btn btn-sm btn-danger" onclick="deleteKey(${k.id})" style="margin-top:4px;background:#991b1b">Supprimer</button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (err) {
+    console.error('Erreur:', err);
+    document.getElementById('tbody').innerHTML = `<tr><td colspan="9" class="empty">Erreur: ${err.message}</td></tr>`;
+  }
+}
+
+loadKeys();
+</script>
+</body>
+</html>
